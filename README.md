@@ -33,7 +33,7 @@ Google カレンダーと連携して、予定やタスク（チェックリス�
 
    * アプリケーションの種類: ウェブ アプリケーション
 
-   * 承認済みの JavaScript 生成元: アプリを配信・実行するURL（例: http://localhost:8000 や https://your-domain.com、ローカルファイルから開く場合は実行環境に合わせて設定）
+   * 承認済みの JavaScript 生成元: アプリを配信・実行するURL（例: http://localhost:8000 や https://your-domain.com 、ローカルファイルから開く場合は実行環境に合わせて設定）
 
 5. 生成された クライアント ID（xxxx.apps.googleusercontent.com の形式）をコピーします。
 
