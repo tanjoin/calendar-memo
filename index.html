@@ -20,7 +20,7 @@
       /* ステータスカラー */
       --status-todo: #8c959f;
       --status-doing: #0969da;
-      --status-done: #57606a;
+      --status-done: #57606a;   /* グラファイト */
       --status-cancel: #cf222e;
     }
 
@@ -239,6 +239,23 @@
       font-size: 15px;
       font-weight: 600;
       color: var(--text-main);
+      word-break: break-word;
+    }
+
+    .event-location {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 4px;
+      word-break: break-all;
+    }
+
+    .event-location a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .event-location a:hover {
+      text-decoration: underline;
     }
 
     .event-desc {
@@ -246,6 +263,17 @@
       color: var(--text-sub);
       margin-top: 6px;
       white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .event-desc a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .event-desc a:hover {
+      text-decoration: underline;
     }
 
     .card-actions {
@@ -325,13 +353,17 @@
       <label for="event-summary">タイトル</label>
       <input type="text" id="event-summary" placeholder="例: MTG, 買い物, タスク">
     </div>
+    <div class="form-group">
+      <label for="event-location">場所 / URL</label>
+      <input type="text" id="event-location" placeholder="例: 会議室A、https://zoom.us/j/xxx、東京都港区...">
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label for="event-status">ステータス</label>
         <select id="event-status">
           <option value="">未完了</option>
           <option value="7">進行中</option>
-          <option value="8">完了</option>
+          <option value="8">完了 (グラファイト)</option>
           <option value="4">中止</option>
         </select>
       </div>
@@ -430,6 +462,13 @@
     const pastDays = localStorage.getItem('gcal_past_days') || '7';
     const maxResults = localStorage.getItem('gcal_max_results') || '30';
 
+    // 表示設定の復元 (デフォルトは true)
+    const savedShowDone = localStorage.getItem('gcal_show_done');
+    showDoneToggle.checked = savedShowDone !== null ? savedShowDone === 'true' : true;
+
+    const savedShowCancel = localStorage.getItem('gcal_show_cancel');
+    showCancelToggle.checked = savedShowCancel !== null ? savedShowCancel === 'true' : true;
+
     clientIdInput.value = clientId;
     calendarIdInput.value = calendarId;
     pastDaysSelect.value = pastDays;
@@ -468,6 +507,16 @@
       }, 100);
     }
   }
+
+  showDoneToggle.addEventListener('change', () => {
+    localStorage.setItem('gcal_show_done', showDoneToggle.checked);
+    renderEvents(fetchedEvents);
+  });
+
+  showCancelToggle.addEventListener('change', () => {
+    localStorage.setItem('gcal_show_cancel', showCancelToggle.checked);
+    renderEvents(fetchedEvents);
+  });
 
   function setDefaultEventTimes() {
     const now = new Date();
@@ -566,6 +615,7 @@
   // イベント作成
   createEventBtn.addEventListener('click', async () => {
     const summary = document.getElementById('event-summary').value.trim();
+    const location = document.getElementById('event-location').value.trim();
     const colorId = document.getElementById('event-status').value;
     const startVal = document.getElementById('event-start').value;
     const endVal = document.getElementById('event-end').value;
@@ -597,6 +647,7 @@
 
     const eventPayload = {
       summary: summary,
+      location: location,
       description: description,
       start: { dateTime: startISO },
       end: { dateTime: endISO }
@@ -623,6 +674,7 @@
       }
 
       document.getElementById('event-summary').value = '';
+      document.getElementById('event-location').value = '';
       document.getElementById('event-description').value = '';
       document.getElementById('event-status').value = '';
       setDefaultEventTimes();
@@ -678,9 +730,10 @@
   // イベント全保存（編集）
   async function saveEditedEvent(eventId) {
     const summary = document.getElementById(`edit-summary-${eventId}`).value.trim();
+    const location = document.getElementById(`edit-location-${eventId}`).value.trim();
     const startVal = document.getElementById(`edit-start-${eventId}`).value;
     const endVal = document.getElementById(`edit-end-${eventId}`).value;
-    const description = document.getElementById(`edit-desc-${eventId}`).value.trim();
+    const description = document.getElementById(`edit-desc-${eventId}`).value;
 
     if (!summary || !startVal || !endVal) {
       alert('タイトル・開始日時・終了日時は必須項目です。');
@@ -695,6 +748,7 @@
 
     const payload = {
       summary: summary,
+      location: location,
       description: description,
       start: { dateTime: startISO },
       end: { dateTime: endISO }
@@ -771,6 +825,43 @@
     return new Date(dateObj.getTime() - tzOffset).toISOString().slice(0, 16);
   }
 
+  function formatLocation(loc) {
+    if (!loc) return '';
+    const trimmed = loc.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return `<div class="event-location">場所: <a href="${escapeHtml(trimmed)}" target="_blank" rel="noopener noreferrer">${escapeHtml(trimmed)}</a></div>`;
+    }
+    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`;
+    return `<div class="event-location">場所: <a href="${mapUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(trimmed)}</a></div>`;
+  }
+
+  function formatDescription(str) {
+    if (!str) return '';
+    // HTML構造を壊さない安全なパース・サニタイズ処理
+    const temp = document.createElement('div');
+    temp.innerHTML = str;
+
+    // 悪意のあるスクリプトタグ等の除去
+    const dangerousElements = temp.querySelectorAll('script, iframe, style, object, embed');
+    dangerousElements.forEach(el => el.remove());
+
+    // オンクリック等のイベント属性削除・リンク属性付与
+    const allElements = temp.querySelectorAll('*');
+    allElements.forEach(el => {
+      Array.from(el.attributes).forEach(attr => {
+        if (attr.name.startsWith('on')) {
+          el.removeAttribute(attr.name);
+        }
+      });
+      if (el.tagName === 'A') {
+        el.setAttribute('target', '_blank');
+        el.setAttribute('rel', 'noopener noreferrer');
+      }
+    });
+
+    return `<div class="event-desc">${temp.innerHTML}</div>`;
+  }
+
   function renderEvents(events) {
     const showDone = showDoneToggle.checked;
     const showCancel = showCancelToggle.checked;
@@ -843,20 +934,26 @@
       const statusConfig = COLOR_MAP[colorId] || { class: 'status-todo', name: '未完了' };
 
       const summary = event.summary || '(タイトルなし)';
-      const description = event.description ? `<div class="event-desc">${escapeHtml(event.description)}</div>` : '';
+      const locationHtml = formatLocation(event.location);
+      const descriptionHtml = formatDescription(event.description);
 
       html += `
         <div class="gist-card ${statusConfig.class}">
           <div class="event-main">
             <div class="event-datetime">${dateTimeStr}</div>
             <div class="event-title">${escapeHtml(summary)}</div>
-            ${description}
+            ${locationHtml}
+            ${descriptionHtml}
 
             <!-- カード内編集フォーム（隠し） -->
             <div class="edit-form-container" id="edit-form-${event.id}" style="display: none;">
               <div class="form-group">
                 <label>タイトル</label>
                 <input type="text" id="edit-summary-${event.id}" value="${escapeHtml(summary)}">
+              </div>
+              <div class="form-group">
+                <label>場所 / URL</label>
+                <input type="text" id="edit-location-${event.id}" value="${escapeHtml(event.location || '')}">
               </div>
               <div class="form-row">
                 <div class="form-group">
