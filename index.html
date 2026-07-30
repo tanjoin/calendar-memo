@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-color=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gist Calendar (OAuth2 Private)</title>
   <style>
     :root {
@@ -13,7 +13,15 @@
       --text-sub: #8b949e;
       --accent: #58a6ff;
       --accent-hover: #1f6feb;
+      --success: #238636;
+      --success-hover: #2ea043;
       --danger: #f85149;
+      
+      /* ステータスカラー */
+      --status-todo: #8b949e;
+      --status-doing: #58a6ff;
+      --status-done: #3fb950;
+      --status-cancel: #f85149;
     }
 
     * {
@@ -80,7 +88,17 @@
       background-color: var(--accent);
     }
 
-    .settings-panel {
+    .btn-success {
+      background-color: var(--success);
+      color: #ffffff;
+      border: none;
+    }
+
+    .btn-success:hover {
+      background-color: var(--success-hover);
+    }
+
+    .panel {
       background-color: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 6px;
@@ -89,8 +107,16 @@
       display: none;
     }
 
-    .settings-panel.active {
+    .panel.active {
       display: block;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border-color);
     }
 
     .form-group {
@@ -104,62 +130,73 @@
       margin-bottom: 4px;
     }
 
-    .form-group input {
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
       width: 100%;
       padding: 8px;
       background-color: var(--bg-color);
       border: 1px solid var(--border-color);
       border-radius: 6px;
       color: var(--text-main);
-      font-family: monospace;
+      font-family: inherit;
       font-size: 13px;
     }
 
-    .form-group input:focus {
+    .form-group textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
       outline: 1px solid var(--accent);
     }
 
+    .form-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    /* イベントカード */
     .gist-card {
       background-color: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 6px;
-      margin-bottom: 16px;
-      overflow: hidden;
-    }
-
-    .gist-header {
-      background-color: #21262d;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 12px;
+      padding: 16px;
+      border-left: 5px solid transparent;
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      font-size: 13px;
+      align-items: flex-start;
+      gap: 16px;
     }
 
-    .gist-date {
-      font-weight: 600;
-      color: var(--accent);
+    .gist-card.status-todo { border-left-color: var(--status-todo); }
+    .gist-card.status-doing { border-left-color: var(--status-doing); }
+    .gist-card.status-done { border-left-color: var(--status-done); opacity: 0.7; }
+    .gist-card.status-cancel { border-left-color: var(--status-cancel); opacity: 0.6; }
+
+    .gist-card.status-done .event-title,
+    .gist-card.status-cancel .event-title {
+      text-decoration: line-through;
     }
 
-    .gist-body {
-      padding: 16px;
+    .event-main {
+      flex: 1;
     }
 
-    .event-item {
-      padding: 8px 0;
-      border-bottom: 1px solid #21262d;
-    }
-
-    .event-item:last-child {
-      border-bottom: none;
-    }
-
-    .event-time {
+    .event-datetime {
       font-size: 12px;
-      color: var(--text-sub);
+      color: var(--accent);
       font-family: monospace;
-      margin-bottom: 2px;
+      font-weight: 600;
+      margin-bottom: 6px;
     }
 
     .event-title {
@@ -170,8 +207,19 @@
     .event-desc {
       font-size: 13px;
       color: var(--text-sub);
-      margin-top: 4px;
+      margin-top: 6px;
       white-space: pre-wrap;
+    }
+
+    /* ステータス切替用セレクトボックス */
+    .status-select {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
     }
 
     .empty-state {
@@ -186,7 +234,6 @@
       margin-top: 8px;
     }
   </style>
-  <!-- Google Identity Services Client Library -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
@@ -195,14 +242,50 @@
   <header>
     <h1>📋 Gist Calendar</h1>
     <div class="header-actions">
+      <button class="btn btn-success" id="toggle-add-panel" style="display: none;">＋ 予定を追加</button>
       <button class="btn btn-primary" id="login-btn" style="display: none;">Googleでログイン</button>
       <button class="btn" id="logout-btn" style="display: none;">ログアウト</button>
       <button class="btn" id="toggle-settings">⚙️ 設定</button>
     </div>
   </header>
 
+  <!-- 予定作成パネル -->
+  <div class="panel" id="add-panel">
+    <div class="panel-title">新しい予定を作成</div>
+    <div class="form-group">
+      <label for="event-summary">タイトル</label>
+      <input type="text" id="event-summary" placeholder="例: MTG, 買い物, タスク">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="event-status">ステータス</label>
+        <select id="event-status">
+          <option value="">⚪ 未完了</option>
+          <option value="7">🔵 進行中</option>
+          <option value="2">🟢 完了</option>
+          <option value="4">🔴 中止</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="event-start">開始日時</label>
+        <input type="datetime-local" id="event-start">
+      </div>
+      <div class="form-group">
+        <label for="event-end">終了日時</label>
+        <input type="datetime-local" id="event-end">
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="event-description">詳細 / メモ</label>
+      <textarea id="event-description" placeholder="アジェンダやメモを書き込めます"></textarea>
+    </div>
+    <button class="btn btn-success" id="create-event-btn">予定を保存</button>
+    <div class="error-message" id="add-error-msg"></div>
+  </div>
+
   <!-- 設定画面 -->
-  <div class="settings-panel" id="settings-panel">
+  <div class="panel" id="settings-panel">
+    <div class="panel-title">設定</div>
     <div class="form-group">
       <label for="client-id">OAuth 2.0 Client ID</label>
       <input type="text" id="client-id" placeholder="xxxx.apps.googleusercontent.com">
@@ -211,17 +294,29 @@
       <label for="calendar-id">カレンダー ID (自分のメインカレンダーなら primary)</label>
       <input type="text" id="calendar-id" value="primary" placeholder="primary または xxx@group.calendar.google.com">
     </div>
-    <div class="form-group">
-      <label for="max-results">取得件数</label>
-      <input type="number" id="max-results" value="15" min="1" max="50">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="past-days">過去の取得範囲</label>
+        <select id="past-days">
+          <option value="0">過去は取得しない</option>
+          <option value="7" selected>1週間前から</option>
+          <option value="30">1ヶ月前から</option>
+          <option value="90">3ヶ月前から</option>
+          <option value="all">全期間</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="max-results">最大取得件数</label>
+        <input type="number" id="max-results" value="30" min="1" max="250">
+      </div>
     </div>
     <button class="btn btn-primary" id="save-settings">保存</button>
-    <div class="error-message" id="error-msg"></div>
+    <div class="error-message" id="settings-error-msg"></div>
   </div>
 
   <!-- カレンダーイベント表示エリア -->
   <div id="events-container">
-    <div class="empty-state">設定から Client ID を入力し、ログインしてください。</div>
+    <div class="empty-state">初期化中...</div>
   </div>
 </div>
 
@@ -229,69 +324,145 @@
   let tokenClient;
   let accessToken = null;
 
+  // Google カレンダー colorId マッピング
+  // 7: Peacock (ブルー/進行中), 2: Sage (グリーン/完了), 4: Flamingo (レッド/中止)
+  const COLOR_MAP = {
+    '7': { class: 'status-doing', name: '🔵 進行中' },
+    '2': { class: 'status-done', name: '🟢 完了' },
+    '4': { class: 'status-cancel', name: '🔴 中止' }
+  };
+
   const clientIdInput = document.getElementById('client-id');
   const calendarIdInput = document.getElementById('calendar-id');
+  const pastDaysSelect = document.getElementById('past-days');
   const maxResultsInput = document.getElementById('max-results');
+  
   const settingsPanel = document.getElementById('settings-panel');
+  const addPanel = document.getElementById('add-panel');
+  
   const toggleSettingsBtn = document.getElementById('toggle-settings');
+  const toggleAddPanelBtn = document.getElementById('toggle-add-panel');
   const saveSettingsBtn = document.getElementById('save-settings');
+  const createEventBtn = document.getElementById('create-event-btn');
+  
   const loginBtn = document.getElementById('login-btn');
   const logoutBtn = document.getElementById('logout-btn');
   const eventsContainer = document.getElementById('events-container');
-  const errorMsg = document.getElementById('error-msg');
+  const settingsErrorMsg = document.getElementById('settings-error-msg');
+  const addErrorMsg = document.getElementById('add-error-msg');
 
   function init() {
     const clientId = localStorage.getItem('gcal_client_id') || '';
     const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
-    const maxResults = localStorage.getItem('gcal_max_results') || '15';
+    const pastDays = localStorage.getItem('gcal_past_days') || '7';
+    const maxResults = localStorage.getItem('gcal_max_results') || '30';
 
     clientIdInput.value = clientId;
     calendarIdInput.value = calendarId;
+    pastDaysSelect.value = pastDays;
     maxResultsInput.value = maxResults;
+
+    setDefaultEventTimes();
 
     if (!clientId) {
       settingsPanel.classList.add('active');
       loginBtn.style.display = 'none';
-    } else {
-      setupTokenClient(clientId);
-      loginBtn.style.display = 'inline-block';
+      toggleAddPanelBtn.style.display = 'none';
+      eventsContainer.innerHTML = '<div class="empty-state">設定から Client ID を入力してください。</div>';
+      return;
     }
+
+    setupTokenClient(clientId);
+
+    const savedToken = sessionStorage.getItem('gcal_access_token');
+    const tokenExpiry = sessionStorage.getItem('gcal_token_expiry');
+
+    if (savedToken && tokenExpiry && Date.now() < parseInt(tokenExpiry, 10)) {
+      accessToken = savedToken;
+      onLoginSuccess();
+      fetchCalendarEvents();
+    } else {
+      loginBtn.style.display = 'inline-block';
+      logoutBtn.style.display = 'none';
+      toggleAddPanelBtn.style.display = 'none';
+      eventsContainer.innerHTML = '<div class="empty-state">「Googleでログイン」を押してください。</div>';
+      
+      const checkGsi = setInterval(() => {
+        if (window.google && google.accounts && google.accounts.oauth2) {
+          clearInterval(checkGsi);
+          tokenClient.requestAccessToken({ prompt: '' });
+        }
+      }, 100);
+    }
+  }
+
+  function setDefaultEventTimes() {
+    const now = new Date();
+    now.setMinutes(0, 0, 0);
+    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+
+    const toLocalISO = (d) => {
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+    };
+
+    document.getElementById('event-start').value = toLocalISO(now);
+    document.getElementById('event-end').value = toLocalISO(oneHourLater);
   }
 
   function setupTokenClient(clientId) {
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
-      scope: 'https://www.googleapis.com/auth/calendar.readonly',
+      scope: 'https://www.googleapis.com/auth/calendar',
       callback: (response) => {
         if (response.error !== undefined) {
-          showError('認証エラーが発生しました: ' + response.error);
           return;
         }
         accessToken = response.access_token;
-        loginBtn.style.display = 'none';
-        logoutBtn.style.display = 'inline-block';
+        
+        const expiresInMs = (parseInt(response.expires_in, 10) - 300) * 1000;
+        const expiryTime = Date.now() + expiresInMs;
+        
+        sessionStorage.setItem('gcal_access_token', accessToken);
+        sessionStorage.setItem('gcal_token_expiry', expiryTime.toString());
+
+        onLoginSuccess();
         fetchCalendarEvents();
       },
     });
   }
 
+  function onLoginSuccess() {
+    loginBtn.style.display = 'none';
+    logoutBtn.style.display = 'inline-block';
+    toggleAddPanelBtn.style.display = 'inline-block';
+  }
+
   toggleSettingsBtn.addEventListener('click', () => {
+    addPanel.classList.remove('active');
     settingsPanel.classList.toggle('active');
+  });
+
+  toggleAddPanelBtn.addEventListener('click', () => {
+    settingsPanel.classList.remove('active');
+    addPanel.classList.toggle('active');
   });
 
   saveSettingsBtn.addEventListener('click', () => {
     const clientId = clientIdInput.value.trim();
     const calendarId = calendarIdInput.value.trim();
+    const pastDays = pastDaysSelect.value;
     const maxResults = maxResultsInput.value;
 
     if (!clientId) {
-      errorMsg.textContent = 'Client ID を入力してください。';
+      settingsErrorMsg.textContent = 'Client ID を入力してください。';
       return;
     }
 
-    errorMsg.textContent = '';
+    settingsErrorMsg.textContent = '';
     localStorage.setItem('gcal_client_id', clientId);
     localStorage.setItem('gcal_calendar_id', calendarId);
+    localStorage.setItem('gcal_past_days', pastDays);
     localStorage.setItem('gcal_max_results', maxResults);
 
     settingsPanel.classList.remove('active');
@@ -306,24 +477,137 @@
   });
 
   logoutBtn.addEventListener('click', () => {
-    if (accessToken) {
-      google.accounts.oauth2.revoke(accessToken, () => {
-        accessToken = null;
-        loginBtn.style.display = 'inline-block';
-        logoutBtn.style.display = 'none';
-        eventsContainer.innerHTML = '<div class="empty-state">ログアウトしました。「Googleでログイン」を押して再読み込みしてください。</div>';
+    sessionStorage.removeItem('gcal_access_token');
+    sessionStorage.removeItem('gcal_token_expiry');
+    accessToken = null;
+    loginBtn.style.display = 'inline-block';
+    logoutBtn.style.display = 'none';
+    toggleAddPanelBtn.style.display = 'none';
+    addPanel.classList.remove('active');
+    eventsContainer.innerHTML = '<div class="empty-state">ログアウトしました。</div>';
+  });
+
+  // イベント作成
+  createEventBtn.addEventListener('click', async () => {
+    const summary = document.getElementById('event-summary').value.trim();
+    const colorId = document.getElementById('event-status').value;
+    const startVal = document.getElementById('event-start').value;
+    const endVal = document.getElementById('event-end').value;
+    const description = document.getElementById('event-description').value.trim();
+
+    if (!summary) {
+      addErrorMsg.textContent = 'タイトルを入力してください。';
+      return;
+    }
+    if (!startVal || !endVal) {
+      addErrorMsg.textContent = '開始日時と終了日時を指定してください。';
+      return;
+    }
+
+    const startISO = new Date(startVal).toISOString();
+    const endISO = new Date(endVal).toISOString();
+
+    if (new Date(startISO) >= new Date(endISO)) {
+      addErrorMsg.textContent = '終了日時は開始日時より後に設定してください。';
+      return;
+    }
+
+    addErrorMsg.textContent = '';
+    createEventBtn.disabled = true;
+    createEventBtn.textContent = '保存中...';
+
+    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+
+    const eventPayload = {
+      summary: summary,
+      description: description,
+      start: { dateTime: startISO },
+      end: { dateTime: endISO }
+    };
+
+    if (colorId) {
+      eventPayload.colorId = colorId;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(eventPayload)
       });
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      document.getElementById('event-summary').value = '';
+      document.getElementById('event-description').value = '';
+      document.getElementById('event-status').value = '';
+      setDefaultEventTimes();
+      addPanel.classList.remove('active');
+
+      fetchCalendarEvents();
+    } catch (err) {
+      addErrorMsg.textContent = '作成に失敗しました: ' + err.message;
+    } finally {
+      createEventBtn.disabled = false;
+      createEventBtn.textContent = '予定を保存';
     }
   });
 
+  // ステータス（色）更新処理
+  async function updateEventStatus(eventId, newColorId) {
+    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
+
+    const payload = {
+      colorId: newColorId ? newColorId : null
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      fetchCalendarEvents();
+    } catch (err) {
+      alert('ステータスの更新に失敗しました: ' + err.message);
+    }
+  }
+
+  // イベント取得
   async function fetchCalendarEvents() {
     eventsContainer.innerHTML = '<div class="empty-state">読み込み中...</div>';
 
     const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
-    const maxResults = localStorage.getItem('gcal_max_results') || '15';
-    const now = new Date().toISOString();
+    const pastDays = localStorage.getItem('gcal_past_days') || '7';
+    const maxResults = localStorage.getItem('gcal_max_results') || '30';
 
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${now}&singleEvents=true&orderBy=startTime&maxResults=${maxResults}`;
+    let timeMinParam = '';
+    if (pastDays !== 'all') {
+      const days = parseInt(pastDays, 10);
+      const minDate = new Date();
+      minDate.setDate(minDate.getDate() - days);
+      timeMinParam = `&timeMin=${minDate.toISOString()}`;
+    }
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=true&orderBy=startTime&maxResults=${maxResults}${timeMinParam}`;
 
     try {
       const response = await fetch(url, {
@@ -334,75 +618,95 @@
       const data = await response.json();
 
       if (data.error) {
+        if (data.error.code === 401) {
+          sessionStorage.removeItem('gcal_access_token');
+          sessionStorage.removeItem('gcal_token_expiry');
+          loginBtn.style.display = 'inline-block';
+          logoutBtn.style.display = 'none';
+          toggleAddPanelBtn.style.display = 'none';
+          throw new Error('セッションが切れました。再度ログインしてください。');
+        }
         throw new Error(data.error.message);
       }
 
       renderEvents(data.items || []);
     } catch (err) {
-      showError('データの取得に失敗しました: ' + err.message);
+      showError(err.message);
     }
   }
 
   function renderEvents(events) {
     if (events.length === 0) {
-      eventsContainer.innerHTML = '<div class="empty-state">今後の予定はありません。</div>';
+      eventsContainer.innerHTML = '<div class="empty-state">表示できる予定はありません。</div>';
       return;
     }
 
-    const grouped = {};
-    events.forEach(event => {
-      const start = event.start.dateTime || event.start.date;
-      const dateKey = new Date(start).toLocaleDateString('ja-JP', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        weekday: 'short'
-      });
-
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = [];
-      }
-      grouped[dateKey].push(event);
-    });
-
     let html = '';
-    for (const [date, dayEvents] of Object.entries(grouped)) {
-      html += `
-        <div class="gist-card">
-          <div class="gist-header">
-            <span class="gist-date">📅 ${date}</span>
-            <span>${dayEvents.length} 件の予定</span>
-          </div>
-          <div class="gist-body">
-      `;
 
-      dayEvents.forEach(event => {
-        const isAllDay = !event.start.dateTime;
-        let timeStr = '終日';
+    events.forEach(event => {
+      const isAllDay = !event.start.dateTime;
+      let dateTimeStr = '';
 
-        if (!isAllDay) {
-          const startTime = new Date(event.start.dateTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-          const endTime = new Date(event.end.dateTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-          timeStr = `${startTime} - ${endTime}`;
+      if (isAllDay) {
+        const startDate = new Date(event.start.date + 'T00:00:00');
+        const dateFormatted = startDate.toLocaleDateString('ja-JP', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          weekday: 'short'
+        });
+        dateTimeStr = `📅 ${dateFormatted} 終日`;
+      } else {
+        const startObj = new Date(event.start.dateTime);
+        const endObj = new Date(event.end.dateTime);
+
+        const startDateStr = startObj.toLocaleDateString('ja-JP', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          weekday: 'short'
+        });
+        const startTimeStr = startObj.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+        
+        const endDateStr = endObj.toLocaleDateString('ja-JP', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          weekday: 'short'
+        });
+        const endTimeStr = endObj.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+
+        if (startDateStr === endDateStr) {
+          dateTimeStr = `📅 ${startDateStr} ${startTimeStr} - ${endTimeStr}`;
+        } else {
+          dateTimeStr = `📅 ${startDateStr} ${startTimeStr} - ${endDateStr} ${endTimeStr}`;
         }
+      }
 
-        const summary = event.summary || '(タイトルなし)';
-        const description = event.description ? `<div class="event-desc">${escapeHtml(event.description)}</div>` : '';
+      const colorId = event.colorId || '';
+      const statusConfig = COLOR_MAP[colorId] || { class: 'status-todo', name: '⚪ 未完了' };
 
-        html += `
-          <div class="event-item">
-            <div class="event-time">${timeStr}</div>
+      const summary = event.summary || '(タイトルなし)';
+      const description = event.description ? `<div class="event-desc">${escapeHtml(event.description)}</div>` : '';
+
+      html += `
+        <div class="gist-card ${statusConfig.class}">
+          <div class="event-main">
+            <div class="event-datetime">${dateTimeStr}</div>
             <div class="event-title">${escapeHtml(summary)}</div>
             ${description}
           </div>
-        `;
-      });
-
-      html += `
+          <div>
+            <select class="status-select" onchange="updateEventStatus('${event.id}', this.value)">
+              <option value="" ${colorId === '' ? 'selected' : ''}>⚪ 未完了</option>
+              <option value="7" ${colorId === '7' ? 'selected' : ''}>🔵 進行中</option>
+              <option value="2" ${colorId === '2' ? 'selected' : ''}>🟢 完了</option>
+              <option value="4" ${colorId === '4' ? 'selected' : ''}>🔴 中止</option>
+            </select>
           </div>
         </div>
       `;
-    }
+    });
 
     eventsContainer.innerHTML = html;
   }
