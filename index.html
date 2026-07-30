@@ -20,7 +20,7 @@
       /* ステータスカラー */
       --status-todo: #8c959f;
       --status-doing: #0969da;
-      --status-done: #57606a;   /* グラファイト */
+      --status-done: #57606a;
       --status-cancel: #cf222e;
     }
 
@@ -296,12 +296,12 @@
 
 <div class="container">
   <header>
-    <h1>📅 カレンダーメモ</h1>
+    <h1>カレンダーメモ</h1>
     <div class="header-actions">
-      <button class="btn btn-success" id="toggle-add-panel" style="display: none;">＋ 予定を追加</button>
+      <button class="btn btn-success" id="toggle-add-panel" style="display: none;">+ 予定を追加</button>
       <button class="btn btn-primary" id="login-btn" style="display: none;">Googleでログイン</button>
       <button class="btn" id="logout-btn" style="display: none;">ログアウト</button>
-      <button class="btn" id="toggle-settings">⚙️ 設定</button>
+      <button class="btn" id="toggle-settings">設定</button>
     </div>
   </header>
 
@@ -310,11 +310,11 @@
     <span style="font-weight: 600; color: var(--text-sub);">表示設定:</span>
     <label class="switch-label">
       <input type="checkbox" id="show-done-toggle" checked>
-      <span>🔘 完了を表示</span>
+      <span>[完了] を表示</span>
     </label>
     <label class="switch-label">
       <input type="checkbox" id="show-cancel-toggle" checked>
-      <span>🔴 中止を表示</span>
+      <span>[中止] を表示</span>
     </label>
   </div>
 
@@ -329,10 +329,10 @@
       <div class="form-group">
         <label for="event-status">ステータス</label>
         <select id="event-status">
-          <option value="">⚪ 未完了</option>
-          <option value="7">🔵 進行中</option>
-          <option value="8">🔘 完了 (グラファイト)</option>
-          <option value="4">🔴 中止</option>
+          <option value="">未完了</option>
+          <option value="7">進行中</option>
+          <option value="8">完了</option>
+          <option value="4">中止</option>
         </select>
       </div>
       <div class="form-group">
@@ -392,14 +392,14 @@
 <script>
   let tokenClient;
   let accessToken = null;
-  let fetchedEvents = []; // 取得データを保持
+  let fetchedEvents = [];
 
   // Google カレンダー colorId マッピング
-  // 7: Peacock (ブルー/進行中), 8: Graphite (グラファイト/完了), 4: Flamingo (レッド/中止)
+  // 7: Peacock (進行中), 8: Graphite (完了), 4: Flamingo (中止)
   const COLOR_MAP = {
-    '7': { class: 'status-doing', name: '🔵 進行中' },
-    '8': { class: 'status-done', name: '🔘 完了' },
-    '4': { class: 'status-cancel', name: '🔴 中止' }
+    '7': { class: 'status-doing', name: '進行中' },
+    '8': { class: 'status-done', name: '完了' },
+    '4': { class: 'status-cancel', name: '中止' }
   };
 
   const clientIdInput = document.getElementById('client-id');
@@ -777,8 +777,8 @@
 
     const filtered = events.filter(event => {
       const colorId = event.colorId || '';
-      if (!showDone && colorId === '8') return false; // 完了を非表示
-      if (!showCancel && colorId === '4') return false; // 中止を非表示
+      if (!showDone && colorId === '8') return false;
+      if (!showCancel && colorId === '4') return false;
       return true;
     });
 
@@ -806,7 +806,7 @@
           day: '2-digit',
           weekday: 'short'
         });
-        dateTimeStr = `<a href="${htmlLink}" target="_blank" rel="noopener noreferrer">📅 ${dateFormatted} 終日 ↗</a>`;
+        dateTimeStr = `<a href="${htmlLink}" target="_blank" rel="noopener noreferrer">${dateFormatted} 終日 [開く]</a>`;
         startInputVal = event.start.date + 'T09:00';
         endInputVal = event.start.date + 'T10:00';
       } else {
@@ -833,14 +833,14 @@
         const endTimeStr = endObj.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
         if (startDateStr === endDateStr) {
-          dateTimeStr = `<a href="${htmlLink}" target="_blank" rel="noopener noreferrer">📅 ${startDateStr} ${startTimeStr} - ${endTimeStr} ↗</a>`;
+          dateTimeStr = `<a href="${htmlLink}" target="_blank" rel="noopener noreferrer">${startDateStr} ${startTimeStr} - ${endTimeStr} [開く]</a>`;
         } else {
-          dateTimeStr = `<a href="${htmlLink}" target="_blank" rel="noopener noreferrer">📅 ${startDateStr} ${startTimeStr} - ${endDateStr} ${endTimeStr} ↗</a>`;
+          dateTimeStr = `<a href="${htmlLink}" target="_blank" rel="noopener noreferrer">${startDateStr} ${startTimeStr} - ${endDateStr} ${endTimeStr} [開く]</a>`;
         }
       }
 
       const colorId = event.colorId || '';
-      const statusConfig = COLOR_MAP[colorId] || { class: 'status-todo', name: '⚪ 未完了' };
+      const statusConfig = COLOR_MAP[colorId] || { class: 'status-todo', name: '未完了' };
 
       const summary = event.summary || '(タイトルなし)';
       const description = event.description ? `<div class="event-desc">${escapeHtml(event.description)}</div>` : '';
@@ -879,12 +879,12 @@
 
           <div class="card-actions">
             <select class="status-select" onchange="updateEventStatus('${event.id}', this.value)">
-              <option value="" ${colorId === '' ? 'selected' : ''}>⚪ 未完了</option>
-              <option value="7" ${colorId === '7' ? 'selected' : ''}>🔵 進行中</option>
-              <option value="8" ${colorId === '8' ? 'selected' : ''}>🔘 完了</option>
-              <option value="4" ${colorId === '4' ? 'selected' : ''}>🔴 中止</option>
+              <option value="" ${colorId === '' ? 'selected' : ''}>未完了</option>
+              <option value="7" ${colorId === '7' ? 'selected' : ''}>進行中</option>
+              <option value="8" ${colorId === '8' ? 'selected' : ''}>完了</option>
+              <option value="4" ${colorId === '4' ? 'selected' : ''}>中止</option>
             </select>
-            <button class="btn edit-btn" onclick="toggleEditMode('${event.id}')">✏️ 編集</button>
+            <button class="btn edit-btn" onclick="toggleEditMode('${event.id}')">編集</button>
           </div>
         </div>
       `;
