@@ -317,6 +317,62 @@
       padding-top: 10px;
       border-top: 1px dashed var(--border-color);
     }
+
+    /* リッチテキスト/HTMLエディタ用スタイル */
+    .editor-toolbar {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      background: #f6f8fa;
+      border: 1px solid var(--border-color);
+      border-bottom: none;
+      padding: 4px;
+      border-radius: 6px 6px 0 0;
+    }
+
+    .editor-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .editor-btn:hover {
+      background: #eaeef2;
+    }
+
+    .editor-content {
+      min-height: 80px;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 0 0 6px 6px;
+      background: #ffffff;
+      outline: none;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-y: auto;
+    }
+
+    .editor-content:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.2);
+    }
+
+    .editor-html-source {
+      width: 100%;
+      min-height: 80px;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 0 0 6px 6px;
+      font-family: monospace;
+      font-size: 12px;
+      display: none;
+      resize: vertical;
+    }
   </style>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -377,8 +433,17 @@
       </div>
     </div>
     <div class="form-group">
-      <label for="event-description">詳細 / メモ</label>
-      <textarea id="event-description" placeholder="アジェンダやメモを書き込めます"></textarea>
+      <label>詳細 / メモ (HTML対応)</label>
+      <div class="editor-toolbar">
+        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('bold')">B</button>
+        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('italic')">I</button>
+        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('underline')">U</button>
+        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList')">• リスト</button>
+        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="addLinkToEditor('event-description-editor')">リンク</button>
+        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="toggleSourceMode('event-description-editor', 'event-description-source')">HTML編集</button>
+      </div>
+      <div id="event-description-editor" class="editor-content" contenteditable="true" onfocus="setLastFocusedEditor(this)"></div>
+      <textarea id="event-description-source" class="editor-html-source" placeholder="HTMLソースを直接記述できます"></textarea>
     </div>
     <button class="btn btn-success" id="create-event-btn">予定を保存</button>
     <div class="error-message" id="add-error-msg"></div>
@@ -425,9 +490,130 @@
   let tokenClient;
   let accessToken = null;
   let fetchedEvents = [];
+  let lastFocusedEditor = null;
+
+  function setLastFocusedEditor(el) {
+    lastFocusedEditor = el;
+  }
+
+  // Web Crypto API による localStorage 暗号化・復号処理
+  const ENCRYPTION_KEY_STRING = "gcal-memo-secure-salt-2026";
+
+  async function getCryptoKey() {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      enc.encode(ENCRYPTION_KEY_STRING),
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: enc.encode("gcal-memo-static-salt"),
+        iterations: 100000,
+        hash: "SHA-256"
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async function setEncryptedItem(key, value) {
+    if (value === null || value === undefined) {
+      localStorage.removeItem(key);
+      return;
+    }
+    try {
+      const keyObj = await getCryptoKey();
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const enc = new TextEncoder();
+      const cipherBuffer = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        keyObj,
+        enc.encode(String(value))
+      );
+      const combined = new Uint8Array(iv.length + cipherBuffer.byteLength);
+      combined.set(iv);
+      combined.set(new Uint8Array(cipherBuffer), iv.length);
+      localStorage.setItem(key, btoa(String.fromCharCode(...combined)));
+    } catch (e) {
+      console.error("Encryption error:", e);
+    }
+  }
+
+  async function getEncryptedItem(key) {
+    const item = localStorage.getItem(key);
+    if (!item) return null;
+    try {
+      const combined = new Uint8Array(atob(item).split("").map(c => c.charCodeAt(0)));
+      const iv = combined.slice(0, 12);
+      const cipherBuffer = combined.slice(12);
+      const keyObj = await getCryptoKey();
+      const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: iv },
+        keyObj,
+        cipherBuffer
+      );
+      return new TextDecoder().decode(decryptedBuffer);
+    } catch (e) {
+      // 復号に失敗した場合は破棄する（破壊的更新の仕様）
+      localStorage.removeItem(key);
+      return null;
+    }
+  }
+
+  // リッチエディタの各種コマンド処理
+  function execCmd(command, value = null) {
+    if (lastFocusedEditor) {
+      lastFocusedEditor.focus();
+    }
+    document.execCommand(command, false, value);
+  }
+
+  function addLinkToEditor(editorId) {
+    const editor = document.getElementById(editorId);
+    if (editor) editor.focus();
+    const url = prompt("リンク先のURLを入力してください:");
+    if (url) {
+      execCmd("createLink", url);
+    }
+  }
+
+  function toggleSourceMode(editorId, sourceId) {
+    const editor = document.getElementById(editorId);
+    const source = document.getElementById(sourceId);
+    if (source.style.display === "none" || !source.style.display) {
+      source.value = editor.innerHTML;
+      editor.style.display = "none";
+      source.style.display = "block";
+    } else {
+      editor.innerHTML = source.value;
+      source.style.display = "none";
+      editor.style.display = "block";
+    }
+  }
+
+  function getEditorHtml(editorId, sourceId) {
+    const editor = document.getElementById(editorId);
+    const source = document.getElementById(sourceId);
+    if (source && source.style.display === "block") {
+      return source.value;
+    }
+    return editor ? editor.innerHTML : "";
+  }
+
+  function setEditorHtml(editorId, sourceId, html) {
+    const editor = document.getElementById(editorId);
+    const source = document.getElementById(sourceId);
+    if (editor) editor.innerHTML = html || "";
+    if (source) source.value = html || "";
+  }
 
   // Google カレンダー colorId マッピング
-  // 7: Peacock (進行中), 8: Graphite (完了), 4: Flamingo (中止)
   const COLOR_MAP = {
     '7': { class: 'status-doing', name: '進行中' },
     '8': { class: 'status-done', name: '完了' },
@@ -456,17 +642,16 @@
   const showDoneToggle = document.getElementById('show-done-toggle');
   const showCancelToggle = document.getElementById('show-cancel-toggle');
 
-  function init() {
-    const clientId = localStorage.getItem('gcal_client_id') || '';
-    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
-    const pastDays = localStorage.getItem('gcal_past_days') || '7';
-    const maxResults = localStorage.getItem('gcal_max_results') || '30';
+  async function init() {
+    const clientId = await getEncryptedItem('gcal_client_id') || '';
+    const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
+    const pastDays = await getEncryptedItem('gcal_past_days') || '7';
+    const maxResults = await getEncryptedItem('gcal_max_results') || '30';
 
-    // 表示設定の復元 (デフォルトは true)
-    const savedShowDone = localStorage.getItem('gcal_show_done');
+    const savedShowDone = await getEncryptedItem('gcal_show_done');
     showDoneToggle.checked = savedShowDone !== null ? savedShowDone === 'true' : true;
 
-    const savedShowCancel = localStorage.getItem('gcal_show_cancel');
+    const savedShowCancel = await getEncryptedItem('gcal_show_cancel');
     showCancelToggle.checked = savedShowCancel !== null ? savedShowCancel === 'true' : true;
 
     clientIdInput.value = clientId;
@@ -508,13 +693,13 @@
     }
   }
 
-  showDoneToggle.addEventListener('change', () => {
-    localStorage.setItem('gcal_show_done', showDoneToggle.checked);
+  showDoneToggle.addEventListener('change', async () => {
+    await setEncryptedItem('gcal_show_done', showDoneToggle.checked);
     renderEvents(fetchedEvents);
   });
 
-  showCancelToggle.addEventListener('change', () => {
-    localStorage.setItem('gcal_show_cancel', showCancelToggle.checked);
+  showCancelToggle.addEventListener('change', async () => {
+    await setEncryptedItem('gcal_show_cancel', showCancelToggle.checked);
     renderEvents(fetchedEvents);
   });
 
@@ -570,10 +755,7 @@
     addPanel.classList.toggle('active');
   });
 
-  showDoneToggle.addEventListener('change', () => renderEvents(fetchedEvents));
-  showCancelToggle.addEventListener('change', () => renderEvents(fetchedEvents));
-
-  saveSettingsBtn.addEventListener('click', () => {
+  saveSettingsBtn.addEventListener('click', async () => {
     const clientId = clientIdInput.value.trim();
     const calendarId = calendarIdInput.value.trim();
     const pastDays = pastDaysSelect.value;
@@ -585,10 +767,10 @@
     }
 
     settingsErrorMsg.textContent = '';
-    localStorage.setItem('gcal_client_id', clientId);
-    localStorage.setItem('gcal_calendar_id', calendarId);
-    localStorage.setItem('gcal_past_days', pastDays);
-    localStorage.setItem('gcal_max_results', maxResults);
+    await setEncryptedItem('gcal_client_id', clientId);
+    await setEncryptedItem('gcal_calendar_id', calendarId);
+    await setEncryptedItem('gcal_past_days', pastDays);
+    await setEncryptedItem('gcal_max_results', maxResults);
 
     settingsPanel.classList.remove('active');
     setupTokenClient(clientId);
@@ -619,7 +801,7 @@
     const colorId = document.getElementById('event-status').value;
     const startVal = document.getElementById('event-start').value;
     const endVal = document.getElementById('event-end').value;
-    const description = document.getElementById('event-description').value.trim();
+    const description = getEditorHtml('event-description-editor', 'event-description-source').trim();
 
     if (!summary) {
       addErrorMsg.textContent = 'タイトルを入力してください。';
@@ -642,7 +824,7 @@
     createEventBtn.disabled = true;
     createEventBtn.textContent = '保存中...';
 
-    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
+    const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
 
     const eventPayload = {
@@ -675,7 +857,7 @@
 
       document.getElementById('event-summary').value = '';
       document.getElementById('event-location').value = '';
-      document.getElementById('event-description').value = '';
+      setEditorHtml('event-description-editor', 'event-description-source', '');
       document.getElementById('event-status').value = '';
       setDefaultEventTimes();
       addPanel.classList.remove('active');
@@ -691,7 +873,7 @@
 
   // ステータス（色）更新処理
   async function updateEventStatus(eventId, newColorId) {
-    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
+    const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
 
     const payload = {
@@ -733,7 +915,7 @@
     const location = document.getElementById(`edit-location-${eventId}`).value.trim();
     const startVal = document.getElementById(`edit-start-${eventId}`).value;
     const endVal = document.getElementById(`edit-end-${eventId}`).value;
-    const description = document.getElementById(`edit-desc-${eventId}`).value;
+    const description = getEditorHtml(`edit-desc-editor-${eventId}`, `edit-desc-source-${eventId}`);
 
     if (!summary || !startVal || !endVal) {
       alert('タイトル・開始日時・終了日時は必須項目です。');
@@ -743,7 +925,7 @@
     const startISO = new Date(startVal).toISOString();
     const endISO = new Date(endVal).toISOString();
 
-    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
+    const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
 
     const payload = {
@@ -779,9 +961,9 @@
   async function fetchCalendarEvents() {
     eventsContainer.innerHTML = '<div class="empty-state">読み込み中...</div>';
 
-    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
-    const pastDays = localStorage.getItem('gcal_past_days') || '7';
-    const maxResults = localStorage.getItem('gcal_max_results') || '30';
+    const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
+    const pastDays = await getEncryptedItem('gcal_past_days') || '7';
+    const maxResults = await getEncryptedItem('gcal_max_results') || '30';
 
     let timeMinParam = '';
     if (pastDays !== 'all') {
@@ -948,26 +1130,17 @@
             <!-- カード内編集フォーム（隠し） -->
             <div class="edit-form-container" id="edit-form-${event.id}" style="display: none;">
               <div class="form-group">
-                <label>タイトル</label>
-                <input type="text" id="edit-summary-${event.id}" value="${escapeHtml(summary)}">
-              </div>
-              <div class="form-group">
-                <label>場所 / URL</label>
-                <input type="text" id="edit-location-${event.id}" value="${escapeHtml(event.location || '')}">
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label>開始日時</label>
-                  <input type="datetime-local" id="edit-start-${event.id}" value="${startInputVal}">
+                <label>詳細 / メモ (HTML対応)</label>
+                <div class="editor-toolbar">
+                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('bold')">B</button>
+                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('italic')">I</button>
+                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('underline')">U</button>
+                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList')">• リスト</button>
+                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="addLinkToEditor('edit-desc-editor-${event.id}')">リンク</button>
+                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="toggleSourceMode('edit-desc-editor-${event.id}', 'edit-desc-source-${event.id}')">HTML編集</button>
                 </div>
-                <div class="form-group">
-                  <label>終了日時</label>
-                  <input type="datetime-local" id="edit-end-${event.id}" value="${endInputVal}">
-                </div>
-              </div>
-              <div class="form-group">
-                <label>詳細 / メモ</label>
-                <textarea id="edit-desc-${event.id}">${escapeHtml(event.description || '')}</textarea>
+                <div id="edit-desc-editor-${event.id}" class="editor-content" contenteditable="true" onfocus="setLastFocusedEditor(this)">${event.description || ''}</div>
+                <textarea id="edit-desc-source-${event.id}" class="editor-html-source" placeholder="HTMLソース">${escapeHtml(event.description || '')}</textarea>
               </div>
               <button class="btn btn-primary edit-btn" onclick="saveEditedEvent('${event.id}')">変更を保存</button>
               <button class="btn edit-btn" onclick="toggleEditMode('${event.id}')">キャンセル</button>
