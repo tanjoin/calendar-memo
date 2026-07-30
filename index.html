@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gist Calendar (OAuth2 Private)</title>
+  <title>カレンダーメモ</title>
   <style>
     :root {
-      --bg-color: #0d1117;
-      --card-bg: #161b22;
-      --border-color: #30363d;
-      --text-main: #c9d1d9;
-      --text-sub: #8b949e;
-      --accent: #58a6ff;
-      --accent-hover: #1f6feb;
-      --success: #238636;
-      --success-hover: #2ea043;
-      --danger: #f85149;
+      --bg-color: #f6f8fa;
+      --card-bg: #ffffff;
+      --border-color: #d0d7de;
+      --text-main: #1f2328;
+      --text-sub: #636c76;
+      --accent: #0969da;
+      --accent-hover: #0449d0;
+      --success: #1f883d;
+      --success-hover: #1a7f37;
+      --danger: #cf222e;
       
       /* ステータスカラー */
-      --status-todo: #8b949e;
-      --status-doing: #58a6ff;
-      --status-done: #3fb950;
-      --status-cancel: #f85149;
+      --status-todo: #8c959f;
+      --status-doing: #0969da;
+      --status-done: #57606a;   /* グラファイト */
+      --status-cancel: #cf222e;
     }
 
     * {
@@ -49,7 +49,7 @@
       justify-content: space-between;
       align-items: center;
       padding-bottom: 16px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       border-bottom: 1px solid var(--border-color);
     }
 
@@ -61,6 +61,33 @@
     .header-actions {
       display: flex;
       gap: 10px;
+    }
+
+    /* フィルタースイッチエリア */
+    .filter-bar {
+      display: flex;
+      gap: 20px;
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      padding: 10px 16px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .switch-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .switch-label input {
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
     }
 
     .btn {
@@ -75,17 +102,17 @@
     }
 
     .btn:hover {
-      background-color: #21262d;
+      background-color: #f3f4f6;
     }
 
     .btn-primary {
-      background-color: var(--accent-hover);
+      background-color: var(--accent);
       color: #ffffff;
       border: none;
     }
 
     .btn-primary:hover {
-      background-color: var(--accent);
+      background-color: var(--accent-hover);
     }
 
     .btn-success {
@@ -105,6 +132,7 @@
       padding: 16px;
       margin-bottom: 20px;
       display: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
     .panel.active {
@@ -135,7 +163,7 @@
     .form-group select {
       width: 100%;
       padding: 8px;
-      background-color: var(--bg-color);
+      background-color: #ffffff;
       border: 1px solid var(--border-color);
       border-radius: 6px;
       color: var(--text-main);
@@ -151,7 +179,7 @@
     .form-group input:focus,
     .form-group textarea:focus,
     .form-group select:focus {
-      outline: 1px solid var(--accent);
+      outline: 2px solid var(--accent);
     }
 
     .form-row {
@@ -170,7 +198,8 @@
       border-radius: 6px;
       margin-bottom: 12px;
       padding: 16px;
-      border-left: 5px solid transparent;
+      border-left: 6px solid var(--status-todo);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
@@ -179,8 +208,8 @@
 
     .gist-card.status-todo { border-left-color: var(--status-todo); }
     .gist-card.status-doing { border-left-color: var(--status-doing); }
-    .gist-card.status-done { border-left-color: var(--status-done); opacity: 0.7; }
-    .gist-card.status-cancel { border-left-color: var(--status-cancel); opacity: 0.6; }
+    .gist-card.status-done { border-left-color: var(--status-done); opacity: 0.75; background-color: #fcfcfc; }
+    .gist-card.status-cancel { border-left-color: var(--status-cancel); opacity: 0.65; background-color: #fcfcfc; }
 
     .gist-card.status-done .event-title,
     .gist-card.status-cancel .event-title {
@@ -192,16 +221,24 @@
     }
 
     .event-datetime {
-      font-size: 12px;
-      color: var(--accent);
-      font-family: monospace;
+      font-size: 13px;
       font-weight: 600;
       margin-bottom: 6px;
     }
 
+    .event-datetime a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .event-datetime a:hover {
+      text-decoration: underline;
+    }
+
     .event-title {
       font-size: 15px;
-      font-weight: 500;
+      font-weight: 600;
+      color: var(--text-main);
     }
 
     .event-desc {
@@ -211,15 +248,26 @@
       white-space: pre-wrap;
     }
 
-    /* ステータス切替用セレクトボックス */
+    .card-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
     .status-select {
-      background-color: var(--bg-color);
+      background-color: #ffffff;
       color: var(--text-main);
       border: 1px solid var(--border-color);
       border-radius: 4px;
-      padding: 6px 10px;
+      padding: 5px 8px;
       font-size: 12px;
       cursor: pointer;
+    }
+
+    .edit-btn {
+      font-size: 12px;
+      padding: 4px 8px;
     }
 
     .empty-state {
@@ -233,6 +281,14 @@
       font-size: 13px;
       margin-top: 8px;
     }
+
+    /* 編集フォーム（カード内展開） */
+    .edit-form-container {
+      width: 100%;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border-color);
+    }
   </style>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -240,7 +296,7 @@
 
 <div class="container">
   <header>
-    <h1>📋 Gist Calendar</h1>
+    <h1>📅 カレンダーメモ</h1>
     <div class="header-actions">
       <button class="btn btn-success" id="toggle-add-panel" style="display: none;">＋ 予定を追加</button>
       <button class="btn btn-primary" id="login-btn" style="display: none;">Googleでログイン</button>
@@ -248,6 +304,19 @@
       <button class="btn" id="toggle-settings">⚙️ 設定</button>
     </div>
   </header>
+
+  <!-- 表示フィルターバー -->
+  <div class="filter-bar">
+    <span style="font-weight: 600; color: var(--text-sub);">表示設定:</span>
+    <label class="switch-label">
+      <input type="checkbox" id="show-done-toggle" checked>
+      <span>🔘 完了を表示</span>
+    </label>
+    <label class="switch-label">
+      <input type="checkbox" id="show-cancel-toggle" checked>
+      <span>🔴 中止を表示</span>
+    </label>
+  </div>
 
   <!-- 予定作成パネル -->
   <div class="panel" id="add-panel">
@@ -262,7 +331,7 @@
         <select id="event-status">
           <option value="">⚪ 未完了</option>
           <option value="7">🔵 進行中</option>
-          <option value="2">🟢 完了</option>
+          <option value="8">🔘 完了 (グラファイト)</option>
           <option value="4">🔴 中止</option>
         </select>
       </div>
@@ -323,12 +392,13 @@
 <script>
   let tokenClient;
   let accessToken = null;
+  let fetchedEvents = []; // 取得データを保持
 
   // Google カレンダー colorId マッピング
-  // 7: Peacock (ブルー/進行中), 2: Sage (グリーン/完了), 4: Flamingo (レッド/中止)
+  // 7: Peacock (ブルー/進行中), 8: Graphite (グラファイト/完了), 4: Flamingo (レッド/中止)
   const COLOR_MAP = {
     '7': { class: 'status-doing', name: '🔵 進行中' },
-    '2': { class: 'status-done', name: '🟢 完了' },
+    '8': { class: 'status-done', name: '🔘 完了' },
     '4': { class: 'status-cancel', name: '🔴 中止' }
   };
 
@@ -350,6 +420,9 @@
   const eventsContainer = document.getElementById('events-container');
   const settingsErrorMsg = document.getElementById('settings-error-msg');
   const addErrorMsg = document.getElementById('add-error-msg');
+
+  const showDoneToggle = document.getElementById('show-done-toggle');
+  const showCancelToggle = document.getElementById('show-cancel-toggle');
 
   function init() {
     const clientId = localStorage.getItem('gcal_client_id') || '';
@@ -447,6 +520,9 @@
     settingsPanel.classList.remove('active');
     addPanel.classList.toggle('active');
   });
+
+  showDoneToggle.addEventListener('change', () => renderEvents(fetchedEvents));
+  showCancelToggle.addEventListener('change', () => renderEvents(fetchedEvents));
 
   saveSettingsBtn.addEventListener('click', () => {
     const clientId = clientIdInput.value.trim();
@@ -591,6 +667,60 @@
     }
   }
 
+  // 編集モード切替
+  function toggleEditMode(eventId) {
+    const form = document.getElementById(`edit-form-${eventId}`);
+    if (form) {
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+  }
+
+  // イベント全保存（編集）
+  async function saveEditedEvent(eventId) {
+    const summary = document.getElementById(`edit-summary-${eventId}`).value.trim();
+    const startVal = document.getElementById(`edit-start-${eventId}`).value;
+    const endVal = document.getElementById(`edit-end-${eventId}`).value;
+    const description = document.getElementById(`edit-desc-${eventId}`).value.trim();
+
+    if (!summary || !startVal || !endVal) {
+      alert('タイトル・開始日時・終了日時は必須項目です。');
+      return;
+    }
+
+    const startISO = new Date(startVal).toISOString();
+    const endISO = new Date(endVal).toISOString();
+
+    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
+
+    const payload = {
+      summary: summary,
+      description: description,
+      start: { dateTime: startISO },
+      end: { dateTime: endISO }
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      fetchCalendarEvents();
+    } catch (err) {
+      alert('更新に失敗しました: ' + err.message);
+    }
+  }
+
   // イベント取得
   async function fetchCalendarEvents() {
     eventsContainer.innerHTML = '<div class="empty-state">読み込み中...</div>';
@@ -629,23 +759,44 @@
         throw new Error(data.error.message);
       }
 
-      renderEvents(data.items || []);
+      fetchedEvents = data.items || [];
+      renderEvents(fetchedEvents);
     } catch (err) {
       showError(err.message);
     }
   }
 
+  function toLocalISOInput(dateObj) {
+    const tzOffset = dateObj.getTimezoneOffset() * 60000;
+    return new Date(dateObj.getTime() - tzOffset).toISOString().slice(0, 16);
+  }
+
   function renderEvents(events) {
-    if (events.length === 0) {
+    const showDone = showDoneToggle.checked;
+    const showCancel = showCancelToggle.checked;
+
+    const filtered = events.filter(event => {
+      const colorId = event.colorId || '';
+      if (!showDone && colorId === '8') return false; // 完了を非表示
+      if (!showCancel && colorId === '4') return false; // 中止を非表示
+      return true;
+    });
+
+    if (filtered.length === 0) {
       eventsContainer.innerHTML = '<div class="empty-state">表示できる予定はありません。</div>';
       return;
     }
 
     let html = '';
 
-    events.forEach(event => {
+    filtered.forEach(event => {
       const isAllDay = !event.start.dateTime;
       let dateTimeStr = '';
+
+      const htmlLink = event.htmlLink || '#';
+
+      let startInputVal = '';
+      let endInputVal = '';
 
       if (isAllDay) {
         const startDate = new Date(event.start.date + 'T00:00:00');
@@ -655,10 +806,15 @@
           day: '2-digit',
           weekday: 'short'
         });
-        dateTimeStr = `📅 ${dateFormatted} 終日`;
+        dateTimeStr = `<a href="${htmlLink}" target="_blank" rel="noopener noreferrer">📅 ${dateFormatted} 終日 ↗</a>`;
+        startInputVal = event.start.date + 'T09:00';
+        endInputVal = event.start.date + 'T10:00';
       } else {
         const startObj = new Date(event.start.dateTime);
         const endObj = new Date(event.end.dateTime);
+
+        startInputVal = toLocalISOInput(startObj);
+        endInputVal = toLocalISOInput(endObj);
 
         const startDateStr = startObj.toLocaleDateString('ja-JP', {
           year: 'numeric',
@@ -677,9 +833,9 @@
         const endTimeStr = endObj.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
         if (startDateStr === endDateStr) {
-          dateTimeStr = `📅 ${startDateStr} ${startTimeStr} - ${endTimeStr}`;
+          dateTimeStr = `<a href="${htmlLink}" target="_blank" rel="noopener noreferrer">📅 ${startDateStr} ${startTimeStr} - ${endTimeStr} ↗</a>`;
         } else {
-          dateTimeStr = `📅 ${startDateStr} ${startTimeStr} - ${endDateStr} ${endTimeStr}`;
+          dateTimeStr = `<a href="${htmlLink}" target="_blank" rel="noopener noreferrer">📅 ${startDateStr} ${startTimeStr} - ${endDateStr} ${endTimeStr} ↗</a>`;
         }
       }
 
@@ -695,14 +851,40 @@
             <div class="event-datetime">${dateTimeStr}</div>
             <div class="event-title">${escapeHtml(summary)}</div>
             ${description}
+
+            <!-- カード内編集フォーム（隠し） -->
+            <div class="edit-form-container" id="edit-form-${event.id}" style="display: none;">
+              <div class="form-group">
+                <label>タイトル</label>
+                <input type="text" id="edit-summary-${event.id}" value="${escapeHtml(summary)}">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>開始日時</label>
+                  <input type="datetime-local" id="edit-start-${event.id}" value="${startInputVal}">
+                </div>
+                <div class="form-group">
+                  <label>終了日時</label>
+                  <input type="datetime-local" id="edit-end-${event.id}" value="${endInputVal}">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>詳細 / メモ</label>
+                <textarea id="edit-desc-${event.id}">${escapeHtml(event.description || '')}</textarea>
+              </div>
+              <button class="btn btn-primary edit-btn" onclick="saveEditedEvent('${event.id}')">変更を保存</button>
+              <button class="btn edit-btn" onclick="toggleEditMode('${event.id}')">キャンセル</button>
+            </div>
           </div>
-          <div>
+
+          <div class="card-actions">
             <select class="status-select" onchange="updateEventStatus('${event.id}', this.value)">
               <option value="" ${colorId === '' ? 'selected' : ''}>⚪ 未完了</option>
               <option value="7" ${colorId === '7' ? 'selected' : ''}>🔵 進行中</option>
-              <option value="2" ${colorId === '2' ? 'selected' : ''}>🟢 完了</option>
+              <option value="8" ${colorId === '8' ? 'selected' : ''}>🔘 完了</option>
               <option value="4" ${colorId === '4' ? 'selected' : ''}>🔴 中止</option>
             </select>
+            <button class="btn edit-btn" onclick="toggleEditMode('${event.id}')">✏️ 編集</button>
           </div>
         </div>
       `;
