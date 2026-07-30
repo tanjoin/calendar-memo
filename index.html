@@ -20,7 +20,7 @@
       /* ステータスカラー */
       --status-todo: #8c959f;
       --status-doing: #0969da;
-      --status-done: #57606a;   /* グラファイト */
+      --status-done: #57606a;
       --status-cancel: #cf222e;
     }
 
@@ -63,7 +63,6 @@
       gap: 10px;
     }
 
-    /* フィルタースイッチエリア */
     .filter-bar {
       display: flex;
       gap: 20px;
@@ -173,7 +172,7 @@
 
     .form-group textarea {
       resize: vertical;
-      min-height: 60px;
+      min-height: 70px;
     }
 
     .form-group input:focus,
@@ -235,6 +234,21 @@
       text-decoration: underline;
     }
 
+    /* タイトルと完了チェックボックスのレイアウト */
+    .event-title-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .main-status-checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--success);
+      flex-shrink: 0;
+    }
+
     .event-title {
       font-size: 15px;
       font-weight: 600;
@@ -261,7 +275,7 @@
     .event-desc {
       font-size: 13px;
       color: var(--text-sub);
-      margin-top: 6px;
+      margin-top: 8px;
       white-space: pre-wrap;
       word-break: break-word;
       overflow-wrap: anywhere;
@@ -276,11 +290,20 @@
       text-decoration: underline;
     }
 
-    /* リスト要素の余白調整 */
     .event-desc ul,
     .event-desc ol {
       padding-left: 20px;
       margin: 4px 0;
+    }
+
+    /* メモ内インラインタスクチェックボックス */
+    .todo-checkbox {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      accent-color: var(--accent);
+      vertical-align: middle;
+      margin-right: 6px;
     }
 
     .card-actions {
@@ -317,7 +340,6 @@
       margin-top: 8px;
     }
 
-    /* 編集フォーム（カード内展開） */
     .edit-form-container {
       width: 100%;
       margin-top: 10px;
@@ -386,8 +408,8 @@
       </div>
     </div>
     <div class="form-group">
-      <label for="event-description">詳細 / メモ</label>
-      <textarea id="event-description" placeholder="詳細やメモ"></textarea>
+      <label for="event-description">詳細 / メモ（`- [ ] タスク` と書くとチェックボックスになります）</label>
+      <textarea id="event-description" placeholder="- [ ] 持ち物の準備&#10;- [x] チケットの購入"></textarea>
     </div>
     <button class="btn btn-success" id="create-event-btn">予定を保存</button>
     <div class="error-message" id="add-error-msg"></div>
@@ -435,7 +457,6 @@
   let accessToken = null;
   let fetchedEvents = [];
 
-  // Web Crypto API による localStorage 暗号化・復号処理
   const ENCRYPTION_KEY_STRING = "gcal-memo-secure-salt-2026";
 
   async function getCryptoKey() {
@@ -499,13 +520,11 @@
       );
       return new TextDecoder().decode(decryptedBuffer);
     } catch (e) {
-      // 復号に失敗した場合は破棄する（破壊的更新の仕様）
       localStorage.removeItem(key);
       return null;
     }
   }
 
-  // Google カレンダー colorId マッピング
   const COLOR_MAP = {
     '7': { class: 'status-doing', name: '進行中' },
     '8': { class: 'status-done', name: '完了' },
@@ -618,7 +637,6 @@
           return;
         }
         accessToken = response.access_token;
-        
         const expiresInMs = (parseInt(response.expires_in, 10) - 300) * 1000;
         const expiryTime = Date.now() + expiresInMs;
         
@@ -742,7 +760,6 @@
       });
 
       const data = await response.json();
-
       if (data.error) {
         throw new Error(data.error.message);
       }
@@ -793,7 +810,49 @@
     }
   }
 
-  // 編集モード切替
+  // メモ内のタスクチェックボックス切り替え＆自動保存処理
+  async function toggleDescriptionTask(eventId, taskIndex, isChecked) {
+    const event = fetchedEvents.find(e => e.id === eventId);
+    if (!event || !event.description) return;
+
+    let currentIndex = 0;
+    // - [ ] または - [x] の該当箇所のみを置換
+    const updatedDescription = event.description.replace(/-\s*\[([ xX])\]/g, (match) => {
+      if (currentIndex === taskIndex) {
+        currentIndex++;
+        return isChecked ? '- [x]' : '- [ ]';
+      }
+      currentIndex++;
+      return match;
+    });
+
+    event.description = updatedDescription;
+
+    const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ description: updatedDescription })
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      renderEvents(fetchedEvents);
+    } catch (err) {
+      alert('チェックリストの更新に失敗しました: ' + err.message);
+      fetchCalendarEvents();
+    }
+  }
+
   function toggleEditMode(eventId) {
     const form = document.getElementById(`edit-form-${eventId}`);
     if (form) {
@@ -801,7 +860,6 @@
     }
   }
 
-  // イベント全保存（編集）
   async function saveEditedEvent(eventId) {
     const summary = document.getElementById(`edit-summary-${eventId}`).value.trim();
     const location = document.getElementById(`edit-location-${eventId}`).value.trim();
@@ -849,7 +907,6 @@
     }
   }
 
-  // イベント取得
   async function fetchCalendarEvents() {
     eventsContainer.innerHTML = '<div class="empty-state">読み込み中...</div>';
 
@@ -909,21 +966,28 @@
     return `<div class="event-location">場所: <a href="${mapUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(trimmed)}</a></div>`;
   }
 
-  function formatDescription(str) {
+  function formatDescription(str, eventId) {
     if (!str) return '';
-    // HTML構造を壊さない安全なパース・サニタイズ処理
-    const temp = document.createElement('div');
-    temp.innerHTML = str;
 
-    // 悪意のあるスクリプトタグ等の除去
+    // Markdown風の - [ ] / - [x] をインタラクティブなチェックボックスに置換
+    let taskIndex = 0;
+    let htmlWithCheckboxes = str.replace(/-\s*\[([ xX])\]/g, (match, status) => {
+      const isChecked = status.toLowerCase() === 'x';
+      const idx = taskIndex++;
+      return `<input type="checkbox" class="todo-checkbox" ${isChecked ? 'checked' : ''} onchange="toggleDescriptionTask('${eventId}', ${idx}, this.checked)">`;
+    });
+
+    const temp = document.createElement('div');
+    temp.innerHTML = htmlWithCheckboxes;
+
     const dangerousElements = temp.querySelectorAll('script, iframe, style, object, embed');
     dangerousElements.forEach(el => el.remove());
 
-    // オンクリック等のイベント属性削除・リンク属性付与
     const allElements = temp.querySelectorAll('*');
     allElements.forEach(el => {
       Array.from(el.attributes).forEach(attr => {
-        if (attr.name.startsWith('on')) {
+        // 自作のtodo-checkboxのonchangeイベント以外の危険なインラインイベントを除去
+        if (attr.name.startsWith('on') && !el.classList.contains('todo-checkbox')) {
           el.removeAttribute(attr.name);
         }
       });
@@ -1009,13 +1073,20 @@
 
       const summary = event.summary || '(タイトルなし)';
       const locationHtml = formatLocation(event.location);
-      const descriptionHtml = formatDescription(event.description);
+      const descriptionHtml = formatDescription(event.description, event.id);
+
+      const isCompleted = colorId === '8';
 
       html += `
         <div class="gist-card ${statusConfig.class}">
           <div class="event-main">
             <div class="event-datetime">${dateTimeStr}</div>
-            <div class="event-title">${escapeHtml(summary)}</div>
+            
+            <div class="event-title-header">
+              <input type="checkbox" class="main-status-checkbox" ${isCompleted ? 'checked' : ''} onchange="updateEventStatus('${event.id}', this.checked ? '8' : '')" title="完了/未完了を切替">
+              <div class="event-title">${escapeHtml(summary)}</div>
+            </div>
+
             ${locationHtml}
             ${descriptionHtml}
 
