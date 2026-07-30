@@ -276,6 +276,13 @@
       text-decoration: underline;
     }
 
+    /* リスト要素の余白調整 */
+    .event-desc ul,
+    .event-desc ol {
+      padding-left: 20px;
+      margin: 4px 0;
+    }
+
     .card-actions {
       display: flex;
       flex-direction: column;
@@ -317,62 +324,6 @@
       padding-top: 10px;
       border-top: 1px dashed var(--border-color);
     }
-
-    /* リッチテキスト/HTMLエディタ用スタイル */
-    .editor-toolbar {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-      background: #f6f8fa;
-      border: 1px solid var(--border-color);
-      border-bottom: none;
-      padding: 4px;
-      border-radius: 6px 6px 0 0;
-    }
-
-    .editor-btn {
-      background: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      padding: 2px 8px;
-      font-size: 12px;
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--text-main);
-    }
-
-    .editor-btn:hover {
-      background: #eaeef2;
-    }
-
-    .editor-content {
-      min-height: 80px;
-      padding: 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 0 0 6px 6px;
-      background: #ffffff;
-      outline: none;
-      font-size: 13px;
-      line-height: 1.5;
-      overflow-y: auto;
-    }
-
-    .editor-content:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.2);
-    }
-
-    .editor-html-source {
-      width: 100%;
-      min-height: 80px;
-      padding: 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 0 0 6px 6px;
-      font-family: monospace;
-      font-size: 12px;
-      display: none;
-      resize: vertical;
-    }
   </style>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -407,22 +358,24 @@
     <div class="panel-title">新しい予定を作成</div>
     <div class="form-group">
       <label for="event-summary">タイトル</label>
-      <input type="text" id="event-summary" placeholder="例: MTG, 買い物, タスク">
-    </div>
-    <div class="form-group">
-      <label for="event-location">場所 / URL</label>
-      <input type="text" id="event-location" placeholder="例: 会議室A、https://zoom.us/j/xxx、東京都港区...">
+      <input type="text" id="event-summary" placeholder="予定のタイトル">
     </div>
     <div class="form-row">
+      <div class="form-group">
+        <label for="event-location">場所 / URL</label>
+        <input type="text" id="event-location" placeholder="場所 または https://...">
+      </div>
       <div class="form-group">
         <label for="event-status">ステータス</label>
         <select id="event-status">
           <option value="">未完了</option>
           <option value="7">進行中</option>
-          <option value="8">完了 (グラファイト)</option>
+          <option value="8">完了</option>
           <option value="4">中止</option>
         </select>
       </div>
+    </div>
+    <div class="form-row">
       <div class="form-group">
         <label for="event-start">開始日時</label>
         <input type="datetime-local" id="event-start">
@@ -433,17 +386,8 @@
       </div>
     </div>
     <div class="form-group">
-      <label>詳細 / メモ (HTML対応)</label>
-      <div class="editor-toolbar">
-        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('bold')">B</button>
-        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('italic')">I</button>
-        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('underline')">U</button>
-        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList')">• リスト</button>
-        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="addLinkToEditor('event-description-editor')">リンク</button>
-        <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="toggleSourceMode('event-description-editor', 'event-description-source')">HTML編集</button>
-      </div>
-      <div id="event-description-editor" class="editor-content" contenteditable="true" onfocus="setLastFocusedEditor(this)"></div>
-      <textarea id="event-description-source" class="editor-html-source" placeholder="HTMLソースを直接記述できます"></textarea>
+      <label for="event-description">詳細 / メモ</label>
+      <textarea id="event-description" placeholder="詳細やメモ"></textarea>
     </div>
     <button class="btn btn-success" id="create-event-btn">予定を保存</button>
     <div class="error-message" id="add-error-msg"></div>
@@ -490,11 +434,6 @@
   let tokenClient;
   let accessToken = null;
   let fetchedEvents = [];
-  let lastFocusedEditor = null;
-
-  function setLastFocusedEditor(el) {
-    lastFocusedEditor = el;
-  }
 
   // Web Crypto API による localStorage 暗号化・復号処理
   const ENCRYPTION_KEY_STRING = "gcal-memo-secure-salt-2026";
@@ -564,53 +503,6 @@
       localStorage.removeItem(key);
       return null;
     }
-  }
-
-  // リッチエディタの各種コマンド処理
-  function execCmd(command, value = null) {
-    if (lastFocusedEditor) {
-      lastFocusedEditor.focus();
-    }
-    document.execCommand(command, false, value);
-  }
-
-  function addLinkToEditor(editorId) {
-    const editor = document.getElementById(editorId);
-    if (editor) editor.focus();
-    const url = prompt("リンク先のURLを入力してください:");
-    if (url) {
-      execCmd("createLink", url);
-    }
-  }
-
-  function toggleSourceMode(editorId, sourceId) {
-    const editor = document.getElementById(editorId);
-    const source = document.getElementById(sourceId);
-    if (source.style.display === "none" || !source.style.display) {
-      source.value = editor.innerHTML;
-      editor.style.display = "none";
-      source.style.display = "block";
-    } else {
-      editor.innerHTML = source.value;
-      source.style.display = "none";
-      editor.style.display = "block";
-    }
-  }
-
-  function getEditorHtml(editorId, sourceId) {
-    const editor = document.getElementById(editorId);
-    const source = document.getElementById(sourceId);
-    if (source && source.style.display === "block") {
-      return source.value;
-    }
-    return editor ? editor.innerHTML : "";
-  }
-
-  function setEditorHtml(editorId, sourceId, html) {
-    const editor = document.getElementById(editorId);
-    const source = document.getElementById(sourceId);
-    if (editor) editor.innerHTML = html || "";
-    if (source) source.value = html || "";
   }
 
   // Google カレンダー colorId マッピング
@@ -801,7 +693,7 @@
     const colorId = document.getElementById('event-status').value;
     const startVal = document.getElementById('event-start').value;
     const endVal = document.getElementById('event-end').value;
-    const description = getEditorHtml('event-description-editor', 'event-description-source').trim();
+    const description = document.getElementById('event-description').value.trim();
 
     if (!summary) {
       addErrorMsg.textContent = 'タイトルを入力してください。';
@@ -857,7 +749,7 @@
 
       document.getElementById('event-summary').value = '';
       document.getElementById('event-location').value = '';
-      setEditorHtml('event-description-editor', 'event-description-source', '');
+      document.getElementById('event-description').value = '';
       document.getElementById('event-status').value = '';
       setDefaultEventTimes();
       addPanel.classList.remove('active');
@@ -915,7 +807,7 @@
     const location = document.getElementById(`edit-location-${eventId}`).value.trim();
     const startVal = document.getElementById(`edit-start-${eventId}`).value;
     const endVal = document.getElementById(`edit-end-${eventId}`).value;
-    const description = getEditorHtml(`edit-desc-editor-${eventId}`, `edit-desc-source-${eventId}`);
+    const description = document.getElementById(`edit-description-${eventId}`).value;
 
     if (!summary || !startVal || !endVal) {
       alert('タイトル・開始日時・終了日時は必須項目です。');
@@ -1130,17 +1022,28 @@
             <!-- カード内編集フォーム（隠し） -->
             <div class="edit-form-container" id="edit-form-${event.id}" style="display: none;">
               <div class="form-group">
-                <label>詳細 / メモ (HTML対応)</label>
-                <div class="editor-toolbar">
-                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('bold')">B</button>
-                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('italic')">I</button>
-                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('underline')">U</button>
-                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList')">• リスト</button>
-                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="addLinkToEditor('edit-desc-editor-${event.id}')">リンク</button>
-                  <button type="button" class="editor-btn" onmousedown="event.preventDefault()" onclick="toggleSourceMode('edit-desc-editor-${event.id}', 'edit-desc-source-${event.id}')">HTML編集</button>
+                <label>タイトル</label>
+                <input type="text" id="edit-summary-${event.id}" value="${escapeHtml(summary)}">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>場所 / URL</label>
+                  <input type="text" id="edit-location-${event.id}" value="${escapeHtml(event.location || '')}">
                 </div>
-                <div id="edit-desc-editor-${event.id}" class="editor-content" contenteditable="true" onfocus="setLastFocusedEditor(this)">${event.description || ''}</div>
-                <textarea id="edit-desc-source-${event.id}" class="editor-html-source" placeholder="HTMLソース">${escapeHtml(event.description || '')}</textarea>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>開始日時</label>
+                  <input type="datetime-local" id="edit-start-${event.id}" value="${startInputVal}">
+                </div>
+                <div class="form-group">
+                  <label>終了日時</label>
+                  <input type="datetime-local" id="edit-end-${event.id}" value="${endInputVal}">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>詳細 / メモ</label>
+                <textarea id="edit-description-${event.id}">${escapeHtml(event.description || '')}</textarea>
               </div>
               <button class="btn btn-primary edit-btn" onclick="saveEditedEvent('${event.id}')">変更を保存</button>
               <button class="btn edit-btn" onclick="toggleEditMode('${event.id}')">キャンセル</button>
