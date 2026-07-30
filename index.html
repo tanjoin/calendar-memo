@@ -415,17 +415,20 @@
       <label for="calendar-id">カレンダー ID (自分のメインカレンダーなら primary)</label>
       <input type="text" id="calendar-id" value="primary" placeholder="primary または xxx@group.calendar.google.com">
     </div>
+    
+    <!-- 変更箇所: 期間のstartとendを個別に設定できるように変更 -->
     <div class="form-row">
       <div class="form-group">
-        <label for="past-days">取得範囲</label>
-        <select id="past-days">
-          <option value="0" selected>今日以降（最新の予定から取得）</option>
-          <option value="7">1週間前から</option>
-          <option value="30">1ヶ月前から</option>
-          <option value="90">3ヶ月前から</option>
-          <option value="all">全期間</option>
-        </select>
+        <label for="fetch-start">取得開始日時 (空欄で指定なし)</label>
+        <input type="datetime-local" id="fetch-start">
       </div>
+      <div class="form-group">
+        <label for="fetch-end">取得終了日時 (空欄で指定なし)</label>
+        <input type="datetime-local" id="fetch-end">
+      </div>
+    </div>
+
+    <div class="form-row">
       <div class="form-group">
         <label for="max-results">最大取得件数</label>
         <input type="number" id="max-results" value="50" min="1" max="250">
@@ -522,7 +525,11 @@
 
   const clientIdInput = document.getElementById('client-id');
   const calendarIdInput = document.getElementById('calendar-id');
-  const pastDaysSelect = document.getElementById('past-days');
+  
+  // 変更箇所: 開始と終了のinputを取得
+  const fetchStartInput = document.getElementById('fetch-start');
+  const fetchEndInput = document.getElementById('fetch-end');
+  
   const maxResultsInput = document.getElementById('max-results');
   const calendarSelect = document.getElementById('calendar-select');
   
@@ -546,7 +553,11 @@
   async function init() {
     const clientId = await getEncryptedItem('gcal_client_id') || '';
     const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
-    const pastDays = await getEncryptedItem('gcal_past_days') || '0';
+    
+    // 変更箇所: 開始と終了の値を読み込み
+    const fetchStart = await getEncryptedItem('gcal_fetch_start') || '';
+    const fetchEnd = await getEncryptedItem('gcal_fetch_end') || '';
+    
     const maxResults = await getEncryptedItem('gcal_max_results') || '50';
 
     const savedShowDone = await getEncryptedItem('gcal_show_done');
@@ -557,7 +568,11 @@
 
     clientIdInput.value = clientId;
     calendarIdInput.value = calendarId;
-    pastDaysSelect.value = pastDays;
+    
+    // 変更箇所: 初期値をセット
+    fetchStartInput.value = fetchStart;
+    fetchEndInput.value = fetchEnd;
+    
     maxResultsInput.value = maxResults;
 
     setDefaultEventTimes();
@@ -705,7 +720,11 @@
   saveSettingsBtn.addEventListener('click', async () => {
     const clientId = clientIdInput.value.trim();
     const calendarId = calendarIdInput.value.trim();
-    const pastDays = pastDaysSelect.value;
+    
+    // 変更箇所: 保存する値をstartとendに更新
+    const fetchStart = fetchStartInput.value;
+    const fetchEnd = fetchEndInput.value;
+    
     const maxResults = maxResultsInput.value;
 
     if (!clientId) {
@@ -716,7 +735,11 @@
     settingsErrorMsg.textContent = '';
     await setEncryptedItem('gcal_client_id', clientId);
     await setEncryptedItem('gcal_calendar_id', calendarId);
-    await setEncryptedItem('gcal_past_days', pastDays);
+    
+    // 変更箇所: ストレージへ保存
+    await setEncryptedItem('gcal_fetch_start', fetchStart);
+    await setEncryptedItem('gcal_fetch_end', fetchEnd);
+    
     await setEncryptedItem('gcal_max_results', maxResults);
 
     calendarSelect.value = calendarId;
@@ -946,22 +969,21 @@
     eventsContainer.innerHTML = '<div class="empty-state">読み込み中...</div>';
 
     const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
-    const pastDays = await getEncryptedItem('gcal_past_days') || '0';
+    
+    // 変更箇所: startとendの値を取得してパラメータを構築
+    const fetchStart = await getEncryptedItem('gcal_fetch_start') || '';
+    const fetchEnd = await getEncryptedItem('gcal_fetch_end') || '';
     const maxResults = await getEncryptedItem('gcal_max_results') || '50';
 
-    let timeMinParam = '';
-    if (pastDays === '0') {
-      // 過去は取得せず、現在時刻（今）以降の最新イベントを取得
-      const now = new Date();
-      timeMinParam = `&timeMin=${now.toISOString()}`;
-    } else if (pastDays !== 'all') {
-      const days = parseInt(pastDays, 10);
-      const minDate = new Date();
-      minDate.setDate(minDate.getDate() - days);
-      timeMinParam = `&timeMin=${minDate.toISOString()}`;
+    let timeParams = '';
+    if (fetchStart) {
+      timeParams += `&timeMin=${new Date(fetchStart).toISOString()}`;
+    }
+    if (fetchEnd) {
+      timeParams += `&timeMax=${new Date(fetchEnd).toISOString()}`;
     }
 
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=true&orderBy=startTime&maxResults=${maxResults}${timeMinParam}`;
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=true&orderBy=startTime&maxResults=${maxResults}${timeParams}`;
 
     try {
       const response = await fetch(url, {
