@@ -413,10 +413,10 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label for="past-days">過去の取得範囲</label>
+        <label for="past-days">取得範囲</label>
         <select id="past-days">
-          <option value="0">過去は取得しない</option>
-          <option value="7" selected>1週間前から</option>
+          <option value="0" selected>今日以降（最新の予定から取得）</option>
+          <option value="7">1週間前から</option>
           <option value="30">1ヶ月前から</option>
           <option value="90">3ヶ月前から</option>
           <option value="all">全期間</option>
@@ -424,7 +424,7 @@
       </div>
       <div class="form-group">
         <label for="max-results">最大取得件数</label>
-        <input type="number" id="max-results" value="30" min="1" max="250">
+        <input type="number" id="max-results" value="50" min="1" max="250">
       </div>
     </div>
     <button class="btn btn-primary" id="save-settings">保存</button>
@@ -541,8 +541,8 @@
   async function init() {
     const clientId = await getEncryptedItem('gcal_client_id') || '';
     const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
-    const pastDays = await getEncryptedItem('gcal_past_days') || '7';
-    const maxResults = await getEncryptedItem('gcal_max_results') || '30';
+    const pastDays = await getEncryptedItem('gcal_past_days') || '0';
+    const maxResults = await getEncryptedItem('gcal_max_results') || '50';
 
     const savedShowDone = await getEncryptedItem('gcal_show_done');
     showDoneToggle.checked = savedShowDone !== null ? savedShowDone === 'true' : true;
@@ -670,6 +670,7 @@
     settingsPanel.classList.remove('active');
     setupTokenClient(clientId);
     loginBtn.style.display = 'inline-block';
+    fetchCalendarEvents();
   });
 
   loginBtn.addEventListener('click', () => {
@@ -689,7 +690,6 @@
     eventsContainer.innerHTML = '<div class="empty-state">ログアウトしました。</div>';
   });
 
-  // イベント作成
   createEventBtn.addEventListener('click', async () => {
     const summary = document.getElementById('event-summary').value.trim();
     const location = document.getElementById('event-location').value.trim();
@@ -765,7 +765,6 @@
     }
   });
 
-  // ステータス（色）更新処理
   async function updateEventStatus(eventId, newColorId) {
     const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
@@ -795,13 +794,11 @@
     }
   }
 
-  // メモ内のタスクチェックボックス切り替え＆自動保存処理
   async function toggleDescriptionTask(eventId, taskIndex, isChecked) {
     const event = fetchedEvents.find(e => e.id === eventId);
     if (!event || !event.description) return;
 
     let currentIndex = 0;
-    // - [ ] または - [x] の該当箇所のみを置換
     const updatedDescription = event.description.replace(/-\s*\[([ xX])\]/g, (match) => {
       if (currentIndex === taskIndex) {
         currentIndex++;
@@ -896,11 +893,15 @@
     eventsContainer.innerHTML = '<div class="empty-state">読み込み中...</div>';
 
     const calendarId = await getEncryptedItem('gcal_calendar_id') || 'primary';
-    const pastDays = await getEncryptedItem('gcal_past_days') || '7';
-    const maxResults = await getEncryptedItem('gcal_max_results') || '30';
+    const pastDays = await getEncryptedItem('gcal_past_days') || '0';
+    const maxResults = await getEncryptedItem('gcal_max_results') || '50';
 
     let timeMinParam = '';
-    if (pastDays !== 'all') {
+    if (pastDays === '0') {
+      // 過去は取得せず、現在時刻（今）以降の最新イベントを取得
+      const now = new Date();
+      timeMinParam = `&timeMin=${now.toISOString()}`;
+    } else if (pastDays !== 'all') {
       const days = parseInt(pastDays, 10);
       const minDate = new Date();
       minDate.setDate(minDate.getDate() - days);
@@ -962,7 +963,6 @@
   function formatDescription(str, eventId) {
     if (!str) return '';
 
-    // Markdown風の - [ ] / - [x] をインタラクティブなチェックボックスに置換
     let taskIndex = 0;
     let htmlWithCheckboxes = str.replace(/-\s*\[([ xX])\]/g, (match, status) => {
       const isChecked = status.toLowerCase() === 'x';
@@ -979,7 +979,6 @@
     const allElements = temp.querySelectorAll('*');
     allElements.forEach(el => {
       Array.from(el.attributes).forEach(attr => {
-        // 自作のtodo-checkboxのonchangeイベント以外の危険なインラインイベントを除去
         if (attr.name.startsWith('on') && !el.classList.contains('todo-checkbox')) {
           el.removeAttribute(attr.name);
         }
@@ -1067,8 +1066,6 @@
       const summary = event.summary || '(タイトルなし)';
       const locationHtml = formatLocation(event.location);
       const descriptionHtml = formatDescription(event.description, event.id);
-
-      const isCompleted = colorId === '8';
 
       html += `
         <div class="gist-card ${statusConfig.class}">
