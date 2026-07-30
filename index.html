@@ -349,7 +349,11 @@
 
   <!-- 表示フィルターバー -->
   <div class="filter-bar">
-    <span style="font-weight: 600; color: var(--text-sub);">表示設定:</span>
+    <span style="font-weight: 600; color: var(--text-sub);">カレンダー:</span>
+    <select id="calendar-select" class="status-select" style="max-width: 220px;">
+      <option value="primary">メイン (primary)</option>
+    </select>
+    <span style="font-weight: 600; color: var(--text-sub); margin-left: 10px;">表示設定:</span>
     <label class="switch-label">
       <input type="checkbox" id="show-done-toggle" checked>
       <span>[完了] を表示</span>
@@ -520,6 +524,7 @@
   const calendarIdInput = document.getElementById('calendar-id');
   const pastDaysSelect = document.getElementById('past-days');
   const maxResultsInput = document.getElementById('max-results');
+  const calendarSelect = document.getElementById('calendar-select');
   
   const settingsPanel = document.getElementById('settings-panel');
   const addPanel = document.getElementById('add-panel');
@@ -599,6 +604,13 @@
     renderEvents(fetchedEvents);
   });
 
+  calendarSelect.addEventListener('change', async () => {
+    const selectedCalId = calendarSelect.value;
+    await setEncryptedItem('gcal_calendar_id', selectedCalId);
+    calendarIdInput.value = selectedCalId;
+    fetchCalendarEvents();
+  });
+
   function setDefaultEventTimes() {
     const now = new Date();
     now.setMinutes(0, 0, 0);
@@ -638,6 +650,46 @@
     loginBtn.style.display = 'none';
     logoutBtn.style.display = 'inline-block';
     toggleAddPanelBtn.style.display = 'inline-block';
+    fetchCalendarList();
+  }
+
+  async function fetchCalendarList() {
+    if (!accessToken) return;
+    try {
+      const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      const data = await response.json();
+      if (data.items) {
+        calendarSelect.innerHTML = '';
+        const currentCalId = await getEncryptedItem('gcal_calendar_id') || 'primary';
+        
+        let foundMatch = false;
+        data.items.forEach(cal => {
+          const option = document.createElement('option');
+          option.value = cal.id;
+          option.textContent = cal.summary + (cal.primary ? ' (メイン)' : '');
+          if (cal.id === currentCalId) {
+            option.selected = true;
+            foundMatch = true;
+          }
+          calendarSelect.appendChild(option);
+        });
+
+        // 候補にない場合（カスタム入力された場合など）のフォールバック
+        if (!foundMatch && currentCalId) {
+          const option = document.createElement('option');
+          option.value = currentCalId;
+          option.textContent = currentCalId;
+          option.selected = true;
+          calendarSelect.appendChild(option);
+        }
+      }
+    } catch (e) {
+      console.error('カレンダー一覧の取得に失敗しました:', e);
+    }
   }
 
   toggleSettingsBtn.addEventListener('click', () => {
@@ -667,6 +719,7 @@
     await setEncryptedItem('gcal_past_days', pastDays);
     await setEncryptedItem('gcal_max_results', maxResults);
 
+    calendarSelect.value = calendarId;
     settingsPanel.classList.remove('active');
     setupTokenClient(clientId);
     loginBtn.style.display = 'inline-block';
