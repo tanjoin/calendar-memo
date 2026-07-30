@@ -416,7 +416,16 @@
         throw new Error(data.error.message);
       }
 
-      fetchCalendarEvents();
+      const targetEvent = fetchedEvents.find(e => e.id === eventId);
+      if (targetEvent) {
+        if (newColorId) {
+          targetEvent.colorId = newColorId;
+        } else {
+          delete targetEvent.colorId;
+        }
+      }
+
+      renderEvents(fetchedEvents);
     } catch (err) {
       alert('ステータスの更新に失敗しました: ' + err.message);
     }
