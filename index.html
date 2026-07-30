@@ -234,21 +234,6 @@
       text-decoration: underline;
     }
 
-    /* タイトルと完了チェックボックスのレイアウト */
-    .event-title-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .main-status-checkbox {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      accent-color: var(--success);
-      flex-shrink: 0;
-    }
-
     .event-title {
       font-size: 15px;
       font-weight: 600;
@@ -1082,10 +1067,7 @@
           <div class="event-main">
             <div class="event-datetime">${dateTimeStr}</div>
             
-            <div class="event-title-header">
-              <input type="checkbox" class="main-status-checkbox" ${isCompleted ? 'checked' : ''} onchange="updateEventStatus('${event.id}', this.checked ? '8' : '')" title="完了/未完了を切替">
-              <div class="event-title">${escapeHtml(summary)}</div>
-            </div>
+            <div class="event-title">${escapeHtml(summary)}</div>
 
             ${locationHtml}
             ${descriptionHtml}
