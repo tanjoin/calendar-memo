@@ -1,0 +1,326 @@
+    :root {
+      --bg-color: #f6f8fa;
+      --card-bg: #ffffff;
+      --border-color: #d0d7de;
+      --text-main: #1f2328;
+      --text-sub: #636c76;
+      --accent: #0969da;
+      --accent-hover: #0449d0;
+      --success: #1f883d;
+      --success-hover: #1a7f37;
+      --danger: #cf222e;
+      
+      /* ステータスカラー */
+      --status-todo: #8c959f;
+      --status-doing: #0969da;
+      --status-done: #57606a;
+      --status-cancel: #cf222e;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 800px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 20px;
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      padding: 10px 16px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .switch-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .switch-label input {
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
+    }
+
+    .btn {
+      background-color: var(--card-bg);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+
+    .btn:hover {
+      background-color: #f3f4f6;
+    }
+
+    .btn-primary {
+      background-color: var(--accent);
+      color: #ffffff;
+      border: none;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-success {
+      background-color: var(--success);
+      color: #ffffff;
+      border: none;
+    }
+
+    .btn-success:hover {
+      background-color: var(--success-hover);
+    }
+
+    .panel {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 20px;
+      display: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-bottom: 4px;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 8px;
+      background-color: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 70px;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: 2px solid var(--accent);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    /* イベントカード */
+    .gist-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 12px;
+      padding: 16px;
+      border-left: 6px solid var(--status-todo);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .gist-card.status-todo { border-left-color: var(--status-todo); }
+    .gist-card.status-doing { border-left-color: var(--status-doing); }
+    .gist-card.status-done { border-left-color: var(--status-done); opacity: 0.75; background-color: #fcfcfc; }
+    .gist-card.status-cancel { border-left-color: var(--status-cancel); opacity: 0.65; background-color: #fcfcfc; }
+
+    .gist-card.status-done .event-title,
+    .gist-card.status-cancel .event-title {
+      text-decoration: line-through;
+    }
+
+    .event-main {
+      flex: 1;
+    }
+
+    .event-datetime {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .event-datetime a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .event-datetime a:hover {
+      text-decoration: underline;
+    }
+
+    .event-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-main);
+      word-break: break-word;
+    }
+
+    .event-location {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 4px;
+      word-break: break-all;
+    }
+
+    .event-location a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .event-location a:hover {
+      text-decoration: underline;
+    }
+
+    .event-desc {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .event-desc a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .event-desc a:hover {
+      text-decoration: underline;
+    }
+
+    .event-desc ul,
+    .event-desc ol {
+      padding-left: 20px;
+      margin: 4px 0;
+    }
+
+    /* メモ内インラインタスクチェックボックス */
+    .todo-checkbox {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      accent-color: var(--accent);
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    .card-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .status-select {
+      background-color: #ffffff;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .edit-btn {
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-sub);
+    }
+
+    .error-message {
+      color: var(--danger);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .edit-form-container {
+      width: 100%;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border-color);
+    }
