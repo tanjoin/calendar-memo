@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-color=1.0">
+  <title>Gist Calendar (OAuth2 Private)</title>
+  <style>
+    :root {
+      --bg-color: #0d1117;
+      --card-bg: #161b22;
+      --border-color: #30363d;
+      --text-main: #c9d1d9;
+      --text-sub: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #1f6feb;
+      --danger: #f85149;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 800px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      background-color: var(--card-bg);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+
+    .btn:hover {
+      background-color: #21262d;
+    }
+
+    .btn-primary {
+      background-color: var(--accent-hover);
+      color: #ffffff;
+      border: none;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--accent);
+    }
+
+    .settings-panel {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .settings-panel.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-bottom: 4px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 8px;
+      background-color: var(--bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-family: monospace;
+      font-size: 13px;
+    }
+
+    .form-group input:focus {
+      outline: 1px solid var(--accent);
+    }
+
+    .gist-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .gist-header {
+      background-color: #21262d;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .gist-date {
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .gist-body {
+      padding: 16px;
+    }
+
+    .event-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .event-item:last-child {
+      border-bottom: none;
+    }
+
+    .event-time {
+      font-size: 12px;
+      color: var(--text-sub);
+      font-family: monospace;
+      margin-bottom: 2px;
+    }
+
+    .event-title {
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .event-desc {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 4px;
+      white-space: pre-wrap;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-sub);
+    }
+
+    .error-message {
+      color: var(--danger);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+  </style>
+  <!-- Google Identity Services Client Library -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>📋 Gist Calendar</h1>
+    <div class="header-actions">
+      <button class="btn btn-primary" id="login-btn" style="display: none;">Googleでログイン</button>
+      <button class="btn" id="logout-btn" style="display: none;">ログアウト</button>
+      <button class="btn" id="toggle-settings">⚙️ 設定</button>
+    </div>
+  </header>
+
+  <!-- 設定画面 -->
+  <div class="settings-panel" id="settings-panel">
+    <div class="form-group">
+      <label for="client-id">OAuth 2.0 Client ID</label>
+      <input type="text" id="client-id" placeholder="xxxx.apps.googleusercontent.com">
+    </div>
+    <div class="form-group">
+      <label for="calendar-id">カレンダー ID (自分のメインカレンダーなら primary)</label>
+      <input type="text" id="calendar-id" value="primary" placeholder="primary または xxx@group.calendar.google.com">
+    </div>
+    <div class="form-group">
+      <label for="max-results">取得件数</label>
+      <input type="number" id="max-results" value="15" min="1" max="50">
+    </div>
+    <button class="btn btn-primary" id="save-settings">保存</button>
+    <div class="error-message" id="error-msg"></div>
+  </div>
+
+  <!-- カレンダーイベント表示エリア -->
+  <div id="events-container">
+    <div class="empty-state">設定から Client ID を入力し、ログインしてください。</div>
+  </div>
+</div>
+
+<script>
+  let tokenClient;
+  let accessToken = null;
+
+  const clientIdInput = document.getElementById('client-id');
+  const calendarIdInput = document.getElementById('calendar-id');
+  const maxResultsInput = document.getElementById('max-results');
+  const settingsPanel = document.getElementById('settings-panel');
+  const toggleSettingsBtn = document.getElementById('toggle-settings');
+  const saveSettingsBtn = document.getElementById('save-settings');
+  const loginBtn = document.getElementById('login-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  const eventsContainer = document.getElementById('events-container');
+  const errorMsg = document.getElementById('error-msg');
+
+  function init() {
+    const clientId = localStorage.getItem('gcal_client_id') || '';
+    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
+    const maxResults = localStorage.getItem('gcal_max_results') || '15';
+
+    clientIdInput.value = clientId;
+    calendarIdInput.value = calendarId;
+    maxResultsInput.value = maxResults;
+
+    if (!clientId) {
+      settingsPanel.classList.add('active');
+      loginBtn.style.display = 'none';
+    } else {
+      setupTokenClient(clientId);
+      loginBtn.style.display = 'inline-block';
+    }
+  }
+
+  function setupTokenClient(clientId) {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/calendar.readonly',
+      callback: (response) => {
+        if (response.error !== undefined) {
+          showError('認証エラーが発生しました: ' + response.error);
+          return;
+        }
+        accessToken = response.access_token;
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+        fetchCalendarEvents();
+      },
+    });
+  }
+
+  toggleSettingsBtn.addEventListener('click', () => {
+    settingsPanel.classList.toggle('active');
+  });
+
+  saveSettingsBtn.addEventListener('click', () => {
+    const clientId = clientIdInput.value.trim();
+    const calendarId = calendarIdInput.value.trim();
+    const maxResults = maxResultsInput.value;
+
+    if (!clientId) {
+      errorMsg.textContent = 'Client ID を入力してください。';
+      return;
+    }
+
+    errorMsg.textContent = '';
+    localStorage.setItem('gcal_client_id', clientId);
+    localStorage.setItem('gcal_calendar_id', calendarId);
+    localStorage.setItem('gcal_max_results', maxResults);
+
+    settingsPanel.classList.remove('active');
+    setupTokenClient(clientId);
+    loginBtn.style.display = 'inline-block';
+  });
+
+  loginBtn.addEventListener('click', () => {
+    if (tokenClient) {
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+  });
+
+  logoutBtn.addEventListener('click', () => {
+    if (accessToken) {
+      google.accounts.oauth2.revoke(accessToken, () => {
+        accessToken = null;
+        loginBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
+        eventsContainer.innerHTML = '<div class="empty-state">ログアウトしました。「Googleでログイン」を押して再読み込みしてください。</div>';
+      });
+    }
+  });
+
+  async function fetchCalendarEvents() {
+    eventsContainer.innerHTML = '<div class="empty-state">読み込み中...</div>';
+
+    const calendarId = localStorage.getItem('gcal_calendar_id') || 'primary';
+    const maxResults = localStorage.getItem('gcal_max_results') || '15';
+    const now = new Date().toISOString();
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${now}&singleEvents=true&orderBy=startTime&maxResults=${maxResults}`;
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      renderEvents(data.items || []);
+    } catch (err) {
+      showError('データの取得に失敗しました: ' + err.message);
+    }
+  }
+
+  function renderEvents(events) {
+    if (events.length === 0) {
+      eventsContainer.innerHTML = '<div class="empty-state">今後の予定はありません。</div>';
+      return;
+    }
+
+    const grouped = {};
+    events.forEach(event => {
+      const start = event.start.dateTime || event.start.date;
+      const dateKey = new Date(start).toLocaleDateString('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        weekday: 'short'
+      });
+
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(event);
+    });
+
+    let html = '';
+    for (const [date, dayEvents] of Object.entries(grouped)) {
+      html += `
+        <div class="gist-card">
+          <div class="gist-header">
+            <span class="gist-date">📅 ${date}</span>
+            <span>${dayEvents.length} 件の予定</span>
+          </div>
+          <div class="gist-body">
+      `;
+
+      dayEvents.forEach(event => {
+        const isAllDay = !event.start.dateTime;
+        let timeStr = '終日';
+
+        if (!isAllDay) {
+          const startTime = new Date(event.start.dateTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+          const endTime = new Date(event.end.dateTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+          timeStr = `${startTime} - ${endTime}`;
+        }
+
+        const summary = event.summary || '(タイトルなし)';
+        const description = event.description ? `<div class="event-desc">${escapeHtml(event.description)}</div>` : '';
+
+        html += `
+          <div class="event-item">
+            <div class="event-time">${timeStr}</div>
+            <div class="event-title">${escapeHtml(summary)}</div>
+            ${description}
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    }
+
+    eventsContainer.innerHTML = html;
+  }
+
+  function showError(msg) {
+    eventsContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">${escapeHtml(msg)}</div>`;
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, function(m) {
+      return {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      }[m];
+    });
+  }
+
+  window.onload = init;
+</script>
+
+</body>
+</html>
