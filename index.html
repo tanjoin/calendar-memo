@@ -930,6 +930,14 @@
       }
 
       fetchedEvents = data.items || [];
+      
+      // 開始日時が新しい順（降順）にソート
+      fetchedEvents.sort((a, b) => {
+        const timeA = new Date(a.start.dateTime || a.start.date).getTime();
+        const timeB = new Date(b.start.dateTime || b.start.date).getTime();
+        return timeB - timeA;
+      });
+
       renderEvents(fetchedEvents);
     } catch (err) {
       showError(err.message);
